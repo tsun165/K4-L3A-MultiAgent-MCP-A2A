@@ -35,3 +35,4 @@ dist/*
 .vscode/
 .DS_Store
 Thumbs.db
+PAYMENT-POLICY.md
