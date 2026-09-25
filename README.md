@@ -13,6 +13,16 @@ Agent phải:
 
 Customer message không phải ground truth. Không được tự đoán dữ liệu hoặc tạo `evidence_ref` giả.
 
+## Thành viên nhóm
+
+| Thành viên | GitHub | Vai trò chính |
+| --- | --- | --- |
+| Đỗ Khắc Gia Khoa | `Dokhacgiakhoa` | Trưởng nhóm — điều phối Antigravity (AI agent viết toàn bộ code), merge PR, chạy full run và nộp bài |
+| Đỗ Thái Sơn | `tsun165` | Review PR + test/backtest phần order/item/seller và shipment |
+| Hoàng Thái Đạt | `Liber72` | Review PR + test/backtest phần payment/refund, policy và verifier |
+
+Kế hoạch chi tiết và phân công: [PLAN.md](PLAN.md).
+
 ## Dữ liệu
 
 Tham khảo dữ liệu tại: https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
