@@ -4,6 +4,10 @@
 
 ---
 
+## ⚠️ Cập nhật: đọc `STANDARDS.md` trước
+
+`STANDARDS.md` là chuẩn bắt buộc và ưu tiên hơn prompt này. **Task 1b (4 specialist agent) chuyển sang Claude Code**. Bạn chỉ làm core: Task 1 (sửa theo review PR #4), Task 2, 3, 4, 5, và chỉ sửa file thuộc quyền Antigravity trong §2 của `STANDARDS.md`.
+
 ## ⏱️ Giới hạn thời gian
 
 Cả bài lab chỉ có **120 phút**. Ưu tiên chạy được và đúng contract trước, tinh chỉnh sau:

@@ -20,7 +20,9 @@
 
 ## Phân công
 
-> **Antigravity (AI agent, dưới tài khoản Khoa) viết toàn bộ code.** Sơn và Đạt **review PR + viết/chạy test + backtest output**, không tự code logic. Khoa điều phối Antigravity, merge PR, chạy full run và nộp bài.
+> **Chuẩn code bắt buộc: [STANDARDS.md](STANDARDS.md)** (ưu tiên hơn file này khi mâu thuẫn).
+>
+> **Antigravity viết core** (interface, coordinator, verifier, calibration); **Claude Code viết tool registry + 4 specialist agent**. Sơn và Đạt **review PR + viết/chạy test + backtest output**, không tự code logic. Khoa điều phối Antigravity, merge PR, chạy full run và nộp bài.
 
 | Người | GitHub | Vai trò | Phạm vi review / test |
 | --- | --- | --- | --- |
