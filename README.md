@@ -17,9 +17,9 @@ Customer message không phải ground truth. Không được tự đoán dữ li
 
 | Thành viên | GitHub | Vai trò chính |
 | --- | --- | --- |
-| Đỗ Khắc Gia Khoa | `dokhacgiakhoa` | Trưởng nhóm — coordinator, A2A/trace, verifier, tích hợp và nộp bài (thực hiện qua Antigravity, Khoa review) |
-| Đỗ Thái Sơn | `tsun165` | Order/item/seller agent và shipment agent (các issue về đơn hàng và giao hàng) |
-| Hoàng Thái Đạt | `liber72` | Payment/refund agent và policy agent (các issue về thanh toán và hoàn tiền) |
+| Đỗ Khắc Gia Khoa | `Dokhacgiakhoa` | Trưởng nhóm — điều phối Antigravity (AI agent viết toàn bộ code), merge PR, chạy full run và nộp bài |
+| Đỗ Thái Sơn | `tsun165` | Review PR + test/backtest phần order/item/seller và shipment |
+| Hoàng Thái Đạt | `Liber72` | Review PR + test/backtest phần payment/refund, policy và verifier |
 
 Kế hoạch chi tiết và phân công: [PLAN.md](PLAN.md).
 

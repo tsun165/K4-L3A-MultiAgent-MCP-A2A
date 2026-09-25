@@ -20,40 +20,37 @@
 
 ## Phân công
 
-| Người | GitHub | Phụ trách | File chính |
+> **Antigravity (AI agent, dưới tài khoản Khoa) viết toàn bộ code.** Sơn và Đạt **review PR + viết/chạy test + backtest output**, không tự code logic. Khoa điều phối Antigravity, merge PR, chạy full run và nộp bài.
+
+| Người | GitHub | Vai trò | Phạm vi review / test |
 | --- | --- | --- | --- |
-| **Khoa** (trưởng nhóm) | `dokhacgiakhoa` | Khung multi-agent (EvidenceStore, A2A envelope, trace), coordinator, verifier, calibration, failure policy, `ARCHITECTURE.md`, chạy + đóng gói + nộp | `workflow.py`, `agents/base.py`, `agents/verifier.py`, `ARCHITECTURE.md` |
-| **Sơn** | `tsun165` | Order/item/seller agent + shipment agent; rule cho `canceled_order_paid`, `unavailable_order_paid`, `late_delivery_seller`, `late_delivery_logistics`; điền `affected_entities` | `agents/order_agent.py`, `agents/shipment_agent.py`, phần order/shipment trong `rules.py` |
-| **Đạt** | `liber72` | Payment/refund agent + policy agent; rule cho `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed`; tính `financial_resolution` | `agents/payment_agent.py`, `agents/policy_agent.py`, phần payment/refund trong `rules.py` |
-
-> Phần việc của Khoa được giao cho **Antigravity** (AI agent) thực hiện; Khoa review, chạy full run và nộp bài.
-
-Việc chung cả nhóm: `unsupported_claim` / `insufficient_evidence`, `claim_assessments`, `data_conflicts`, review chéo và test.
+| **Khoa** (trưởng nhóm) | `Dokhacgiakhoa` | Giao việc cho Antigravity theo `prompts/antigravity-khoa.md`, merge PR, full run, đóng gói, nộp | Toàn bộ; quyết định cuối khi có tranh luận |
+| **Sơn** | `tsun165` | Reviewer + tester | `order-agent`, `shipment-agent`: `canceled_order_paid`, `unavailable_order_paid`, `late_delivery_seller`, `late_delivery_logistics`, `affected_entities`, trace/workflow |
+| **Đạt** | `Liber72` | Reviewer + tester | `payment-agent`, `policy-agent`, verifier: `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed`, `financial_resolution`, consistency |
 
 **Cách làm việc:**
 
-- Mỗi người làm trên branch riêng (`feat/core-khoa`, `feat/order-shipment-son`, `feat/payment-policy-dat`), merge vào `main` qua PR, ít nhất 1 người khác review.
-- Khoa chốt **interface** (`AgentMessage`, `EvidenceStore`, kiểu kết quả specialist trả về) trước **phút 30**. Sơn và Đạt code theo interface đó, không cần chờ coordinator xong.
-- Mỗi specialist trả về `SpecialistResult` gồm: `findings` (các tín hiệu đã chuẩn hoá), `candidate_issues`, `evidence_refs` đã dùng. Coordinator và verifier (Khoa) tổng hợp thành output.
-- Chỉ Khoa chạy `day09 run` trên toàn bộ 100 case và nộp bài, để trace/audit không bị lẫn giữa nhiều lần chạy. Sơn và Đạt thử trên vài case.
-- Mỗi người tự quản lý `.env` của mình, không commit key.
+- Antigravity làm trên `feat/core-khoa`, mở PR theo nhóm (core, order/shipment, payment/policy). Sơn/Đạt review PR đúng phạm vi của mình, góp ý bằng comment trên PR; Khoa chuyển góp ý cho Antigravity.
+- **Backtest:** sau mỗi lần Khoa full run, Sơn và Đạt đọc `outputs/*.json` + `traces/trace.jsonl` (Khoa chia sẻ, không commit), mỗi người soát ~10 case thuộc issue mình phụ trách: `primary_issue` có hợp lý so với evidence không, tiền có khớp không, ref có đúng case không. Ghi case sai + lý do vào issue.
+- Chỉ Khoa chạy `day09 run` trên toàn bộ 100 case và nộp bài (mọi MCP call bị audit). Sơn/Đạt chỉ chạy `pytest` và test offline.
+- Không commit `.env`, input (`l3a-inputs-*/`, `inputs/*.json`), output, trace.
 
 ---
 
 ## ⏱️ Timeline 120 phút
 
-Lab chỉ có **120 phút** → ưu tiên có bài nộp hợp lệ sớm (khoảng phút 85), rồi mới tinh chỉnh. Các mục đánh dấu *(bỏ nếu thiếu giờ)* là không bắt buộc.
+Lab chỉ có **120 phút** → ưu tiên có bài nộp hợp lệ sớm (khoảng phút 85), rồi mới tinh chỉnh.
 
-| Phút | Khoa (Antigravity) | Sơn | Đạt | Mốc |
+| Phút | Khoa + Antigravity | Sơn (review/test) | Đạt (review/test) | Mốc |
 | --- | --- | --- | --- | --- |
-| 0–15 | Setup, đăng ký team, tải input, `day09 mcp-tools`, chia sẻ `.env` + tool list | Setup, gọi thử tool order/item/seller/shipment trên 2 case | Setup, gọi thử tool payment/refund/policy trên 2 case | Cả nhóm chạy được `day09 mcp-tools` |
-| 15–30 | Task 1: `agents/base.py` + skeleton 4 agent → merge `main` | Ghi field quan trọng vào `notes/mcp-tools.md`, viết nháp rule | Như Sơn, phần payment/refund/policy | **M1 (30'):** interface trên `main` |
-| 30–70 | Task 2 coordinator + Task 3 verifier | Code `order_agent.py` + `shipment_agent.py` | Code `payment_agent.py` + `policy_agent.py` | Mỗi người PR trước phút 70 |
-| 70–85 | Merge PR, chạy thử 3 case, sửa lỗi tích hợp | Hỗ trợ fix lỗi agent mình | Hỗ trợ fix lỗi agent mình | **M2 (85'):** full run + `validate` + **nộp lần 1** |
-| 85–110 | Task 4 confidence + đọc breakdown điểm | Tinh chỉnh rule theo điểm `semantic`/`evidence` | Tinh chỉnh rule theo điểm `semantic`/`evidence` | **Nộp lần 2** trước phút 110 |
-| 110–120 | Task 5 `ARCHITECTURE.md`, nộp bản cuối | Điền phần order/shipment trong `ARCHITECTURE.md` | Điền phần payment/policy trong `ARCHITECTURE.md` | **M3 (120'):** chọn final submission |
+| 0–15 | Setup, đăng ký team, tải input, `day09 mcp-tools`; Antigravity bắt đầu Task 1 | Setup venv, `pytest -q`, đọc schema output + scoring | Như Sơn | Cả nhóm chạy được `pytest` |
+| 15–30 | Task 1: `agents/base.py` + skeleton → PR | Review PR Task 1 (interface, trace) | Review PR Task 1 (EvidenceStore, ref ownership) | **M1 (30'):** interface trên `main` |
+| 30–70 | Task 1b 4 agent + Task 2 coordinator + Task 3 verifier | Review PR order/shipment; viết test fixture cho 4 issue của mình | Review PR payment/policy + verifier; viết test tính tiền + consistency | PR merge trước phút 70 |
+| 70–85 | Chạy thử 3 case, sửa lỗi, full run, `validate`, **nộp lần 1** | Chạy `pytest`, backtest ~10 output | Chạy `pytest`, backtest ~10 output | **M2 (85'):** nộp lần 1 |
+| 85–110 | Task 4 confidence; chuyển lỗi backtest + breakdown điểm cho Antigravity sửa | Báo case sai trong issue #2 | Báo case sai trong issue #3 | **Nộp lần 2** trước phút 110 |
+| 110–120 | Task 5 `ARCHITECTURE.md`, nộp bản cuối | Review `ARCHITECTURE.md` | Soát ZIP (chỉ manifest, trace, outputs) | **M3 (120'):** chọn final submission |
 
-Bỏ nếu thiếu giờ: unit test đầy đủ (chỉ giữ smoke test), chạy song song nhiều case, `claim_assessments` chi tiết.
+Bỏ nếu thiếu giờ: unit test chi tiết (giữ smoke test), chạy song song nhiều case, `claim_assessments` chi tiết.
 
 > Các giai đoạn bên dưới là danh sách việc chi tiết; thời gian thực hiện theo bảng timeline này.
 
@@ -88,10 +85,10 @@ Bỏ nếu thiếu giờ: unit test đầy đủ (chỉ giữ smoke test), chạ
 - [ ] **Khoa:** `day09 mcp-tools` → ghi lại danh sách tool thực tế (tên, tham số) vào `notes/mcp-tools.md`.
 - [ ] Khám phá dữ liệu (script để trong `scripts/`, không nộp):
   - **Khoa:** đọc ~10–15 case input — các field có gì (customer message, order_id, claim…)?
-  - **Sơn:** gọi thử tool domain `order`, `item`, `seller`, `product`, `shipment` cho 2–3 case, dump `data` + `warnings`.
-  - **Đạt:** gọi thử tool domain `payment`, `refund`, `policy`, `customer` cho 2–3 case, dump `data` + `warnings`.
+  - **Antigravity:** gọi thử tool domain `order`, `item`, `seller`, `product`, `shipment` cho 2–3 case, dump `data` + `warnings`.
+  - **Antigravity:** gọi thử tool domain `payment`, `refund`, `policy`, `customer` cho 2–3 case, dump `data` + `warnings`.
   - ⚠️ Mọi call đều bị audit → khám phá có chừng mực, dùng đúng `case_id`.
-- [ ] **Sơn + Đạt:** ghi mapping domain ↔ tool ↔ field quan trọng của phần mình vào `notes/mcp-tools.md`.
+- [ ] **Antigravity:** ghi mapping domain ↔ tool ↔ field quan trọng vào `notes/mcp-tools.md`.
 
 **Deliverable:** `notes/mcp-tools.md` + cả nhóm hiểu rõ input format.
 
@@ -113,9 +110,9 @@ rules.py           # bảng quyết định primary_issue / cause / responsible
 
 - [ ] **Khoa:** **EvidenceStore** (khởi tạo mới mỗi case): lưu `{evidence_ref, domain, tool, data, warnings}`; chỉ nó được phép cấp ref cho output.
 - [ ] **Khoa:** **A2A envelope**: `{case_id, from, to, task, payload, evidence_refs}`; mỗi handoff emit trace `handoff` (actor → target).
-- [ ] **Khoa:** định nghĩa `SpecialistResult` + skeleton rỗng cho 4 specialist để Sơn/Đạt điền.
+- [ ] **Khoa:** định nghĩa `SpecialistResult` + skeleton rỗng cho 4 specialist (logic thật ở Task 1b).
 - [ ] **Khoa:** **Phân quyền tool**: mỗi specialist chỉ gọi tool thuộc domain của mình.
-- [ ] **Sơn / Đạt:** trong agent của mình, gọi tool qua EvidenceStore và emit `tool_result_consumed` mỗi khi dùng evidence.
+- [ ] **Antigravity:** trong mỗi specialist, gọi tool qua EvidenceStore và emit `tool_result_consumed` mỗi khi dùng evidence.
 - [ ] Trace mỗi case theo thứ tự:
   1. `case_received` (CLI đã emit)
   2. `task_assigned` coordinator → từng specialist
@@ -128,11 +125,11 @@ rules.py           # bảng quyết định primary_issue / cause / responsible
 
 **Deliverable:** `day09 run` chạy hết 100 case với output tối thiểu pass schema (`primary_issue=insufficient_evidence`, confidence thấp) nhưng dùng evidence thật; `day09 validate` pass.
 
-### Giai đoạn 3 — Logic nghiệp vụ (phút 30–70, tinh chỉnh 85–110) — trọng tâm 45%, Sơn + Đạt chính
+### Giai đoạn 3 — Logic nghiệp vụ (phút 30–70, tinh chỉnh 85–110) — trọng tâm 45%, Antigravity code, Sơn/Đạt review
 
 Xây bảng quyết định cho 11 giá trị `primary_issue`:
 
-| `primary_issue` | Tín hiệu cần kiểm | Evidence chính | Hướng xử lý gợi ý | Owner |
+| `primary_issue` | Tín hiệu cần kiểm | Evidence chính | Hướng xử lý gợi ý | Reviewer |
 | --- | --- | --- | --- | --- |
 | `canceled_order_paid` | order status = canceled nhưng payment đã capture, chưa refund | order, payment, refund | `action_required`, refund toàn bộ số đã trả | Sơn |
 | `unavailable_order_paid` | status = unavailable, đã thanh toán | order, payment, refund | `action_required`, refund | Sơn |
@@ -146,19 +143,19 @@ Xây bảng quyết định cho 11 giá trị `primary_issue`:
 | `unsupported_claim` | dữ liệu mâu thuẫn với claim khách | domain liên quan | `no_action`, refund 0 | Khoa (tổng hợp) |
 | `insufficient_evidence` | tool not found / thiếu dữ liệu | những gì có | `needs_investigation` | Khoa (tổng hợp) |
 
-`canceled_order_paid` / `unavailable_order_paid` cần cả tín hiệu order (Sơn) lẫn payment/refund (Đạt): Sơn viết rule, Đạt cung cấp số tiền đã trả / đã hoàn.
+`canceled_order_paid` / `unavailable_order_paid` cần cả tín hiệu order lẫn payment/refund: payment-agent cung cấp `paid_total_brl` / `refunded_total_brl` cho order-agent qua coordinator.
 
 > Bảng trên là giả thuyết — **phải kiểm chứng lại với dữ liệu thật ở Giai đoạn 1** (tên field, enum status, cấu trúc policy).
 
 Các việc cụ thể:
 
-- [ ] **Đạt:** chuẩn hoá tiền tệ: dùng `Decimal`, làm tròn 2 chữ số; `recommended_refund_brl == sum(refund_lines.amount_brl)`.
-- [ ] **Sơn:** `affected_entities`: chỉ đưa ID xuất hiện trong evidence của case (không lấy từ customer message nếu MCP không xác nhận). Đạt bổ sung `payment_references`.
+- [ ] **Antigravity** (review: Đạt): chuẩn hoá tiền tệ: dùng `Decimal`, làm tròn 2 chữ số; `recommended_refund_brl == sum(refund_lines.amount_brl)`.
+- [ ] **Antigravity** (review: Sơn): `affected_entities`: chỉ đưa ID xuất hiện trong evidence của case (không lấy từ customer message nếu MCP không xác nhận). Bổ sung `payment_references`.
 - [ ] **Khoa:** `claim_assessments`: tách các claim trong message khách → verdict + evidence riêng.
-- [ ] **Sơn + Đạt:** `root_cause_analysis.ranked_causes`: cause code UPPER_SNAKE, rank 1..n; `responsible_parties` nhất quán với issue (mỗi người phần issue của mình).
+- [ ] **Antigravity** (review: Sơn/Đạt): `root_cause_analysis.ranked_causes`: cause code UPPER_SNAKE, rank 1..n; `responsible_parties` nhất quán với issue
 - [ ] **Khoa:** `data_conflicts`: khi 2 nguồn lệch nhau (vd. message nói 200 BRL, payment nói 150) → ghi `field`, `sources`, `selected_source` (ưu tiên MCP), `resolution_code`.
-- [ ] **Đạt:** `resolution_actions`: bộ action code cố định, không trùng, khớp status (`no_action` ⇒ không có action refund). Chốt danh sách action code với cả nhóm.
-- [ ] **Đạt:** policy agent đọc policy từ MCP (nếu có tool policy) để quyết định cửa sổ refund / trách nhiệm.
+- [ ] **Antigravity** (review: Đạt): `resolution_actions`: bộ action code cố định, không trùng, khớp status (`no_action` ⇒ không có action refund).
+- [ ] **Antigravity** (review: Đạt): policy agent đọc policy từ MCP (nếu có tool policy) để quyết định cửa sổ refund / trách nhiệm.
 - [ ] **Khoa:** `evidence_refs` top-level: chỉ những ref **thực sự hỗ trợ kết luận** (precision quan trọng — đừng dump mọi ref đã gọi).
 
 ### Giai đoạn 4 — Verifier & calibration (phút 30–110) — Khoa chính
@@ -191,10 +188,10 @@ Calibration:
 
 ### Giai đoạn 6 — Test, tài liệu, nộp bài (phút 70–120)
 
-- [ ] **Sơn:** unit test cho rule order/shipment với fixture data giả (chỉ để test logic, **không** dùng làm output).
-- [ ] **Đạt:** unit test cho rule payment/refund/policy + tính tiền.
+- [ ] **Sơn:** viết/chạy unit test cho rule order/shipment với fixture data giả (chỉ để test logic, **không** dùng làm output).
+- [ ] **Đạt:** viết/chạy unit test cho rule payment/refund/policy + tính tiền.
 - [ ] **Khoa:** test verifier: ref lạ bị chặn, tổng tiền lệch bị bắt.
-- [ ] **Khoa** (Sơn/Đạt viết phần agent của mình): điền đầy đủ `ARCHITECTURE.md` (7 mục: overview, ownership, A2A, evidence lifecycle, failure policy, invariants, reproducibility).
+- [ ] **Khoa** (Sơn/Đạt review): điền đầy đủ `ARCHITECTURE.md` (7 mục: overview, ownership, A2A, evidence lifecycle, failure policy, invariants, reproducibility).
 - [ ] **Khoa:** `day09 run` → `day09 validate` → `day09 package --output dist/submission.zip`.
 - [ ] **Khoa:** kiểm tra ZIP chỉ gồm `manifest.json`, `trace.jsonl`, `outputs/*.json` (không source, `.env`, key, log).
 - [ ] **Khoa:** upload tại `/l3a`, chia sẻ breakdown điểm public cho nhóm → quay lại Giai đoạn 3–4 tinh chỉnh.
@@ -204,8 +201,8 @@ Calibration:
 ## 3. Vòng lặp cải thiện sau lần nộp đầu
 
 1. Nhìn component điểm thấp nhất trong breakdown public.
-2. `semantic` thấp → rà lại bảng quyết định, đọc lại các case bị phân loại mơ hồ (**Sơn / Đạt** theo issue mình phụ trách).
-3. `evidence` thấp → thiếu nhóm bắt buộc (gọi thêm tool) hoặc thừa ref (cắt bớt) (**Sơn / Đạt** theo domain, **Khoa** phần chọn ref top-level).
+2. `semantic` thấp → rà lại bảng quyết định, đọc lại các case bị phân loại mơ hồ (Sơn/Đạt backtest chỉ ra case sai → Antigravity sửa).
+3. `evidence` thấp → thiếu nhóm bắt buộc (gọi thêm tool) hoặc thừa ref (cắt bớt) (Sơn/Đạt chỉ ra → Antigravity sửa).
 4. `consistency` thấp → siết verifier (**Khoa**).
 5. `calibration` thấp → chỉnh bảng confidence (**Khoa**).
 6. Nhớ: public chỉ chiếm 20% điểm cuối, private 80% → **không overfit** theo public, ưu tiên rule tổng quát.

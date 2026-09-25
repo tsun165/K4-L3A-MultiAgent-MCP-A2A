@@ -8,8 +8,8 @@
 
 Cả bài lab chỉ có **120 phút**. Ưu tiên chạy được và đúng contract trước, tinh chỉnh sau:
 
-- Task 1 phải xong và merge vào `main` trước **phút 30** (Sơn và Đạt đang chờ).
-- Task 2 + 3 xong trước **phút 70**; phút 85 phải có full run hợp lệ để nộp lần 1.
+- Task 1 xong trước **phút 30**.
+- Task 1b + 2 + 3 xong trước **phút 70** (mở PR để Sơn/Đạt review); phút 85 phải có full run hợp lệ để nộp lần 1.
 - Test: chỉ viết smoke test tối thiểu với fake gateway; bỏ test chi tiết nếu thiếu giờ.
 - Không over-engineer: code ngắn, rõ, đúng schema là đủ.
 
@@ -39,7 +39,7 @@ Hàm cần hoàn thiện: `async def solve_case(case, gateway, trace) -> dict` t
 6. Không ghi prompt hay chain-of-thought vào trace — chỉ ghi event, actor, target, decision code, tool name, evidence refs.
 7. Không commit `.env`, API key, input của cuộc thi, output, trace, hay file debug.
 8. **Không tự chạy `day09 run` trên toàn bộ 100 case và không nộp bài** — mọi MCP call đều bị server audit. Khi cần thử với MCP thật, chỉ chạy trên 1–3 case và báo trước. Khoa sẽ tự chạy full run và nộp.
-9. Không sửa logic nghiệp vụ trong `agents/order_agent.py`, `agents/shipment_agent.py` (của Sơn) và `agents/payment_agent.py`, `agents/policy_agent.py` (của Đạt) ngoài việc tạo skeleton ban đầu ở Task 1.
+9. Bạn viết **toàn bộ** code, kể cả 4 specialist agent. Sơn và Đạt chỉ review PR và viết/chạy test; khi họ comment trên PR hoặc issue, xử lý góp ý đó.
 
 ## Quy ước làm việc
 
@@ -50,7 +50,7 @@ Hàm cần hoàn thiện: `async def solve_case(case, gateway, trace) -> dict` t
 
 ---
 
-## Task 1 — Interface chung + skeleton (ưu tiên cao nhất, Sơn và Đạt đang chờ)
+## Task 1 — Interface chung + skeleton (ưu tiên cao nhất)
 
 Tạo package `src/student_agent/agents/` với:
 
@@ -68,9 +68,20 @@ Tạo package `src/student_agent/agents/` với:
 - `class Specialist(Protocol)`: `name: str`, `allowed_tools: set[str]`, `async run(case, store, trace) -> SpecialistResult`.
 
 **Skeleton** (chỉ khung, trả `SpecialistResult` rỗng + TODO rõ ràng cho chủ sở hữu):
-`agents/order_agent.py` (Sơn), `agents/shipment_agent.py` (Sơn), `agents/payment_agent.py` (Đạt), `agents/policy_agent.py` (Đạt). Thêm docstring ngắn nêu chủ sở hữu và các `primary_issue` họ phụ trách (xem bảng trong `PLAN.md`).
+`agents/order_agent.py`, `agents/shipment_agent.py`, `agents/payment_agent.py`, `agents/policy_agent.py`, docstring nêu các `primary_issue` mỗi agent phụ trách (xem bảng trong `PLAN.md`). Logic thật viết ở Task 1b.
 
 **Test:** `tests/test_agents_base.py` với fake gateway (không gọi MCP thật): store tách biệt giữa 2 case, `fetch` emit đúng trace, tool ngoài quyền bị chặn, retry có giới hạn.
+
+## Task 1b — 4 specialist agent (trước đây là việc của Sơn/Đạt)
+
+Thay skeleton bằng logic thật. Trước khi viết rule, gọi thử tool trên **1–2 case** để biết field thật (ghi vào `notes/mcp-tools.md`), không đoán tên field.
+
+- `order-agent` (`agents/order_agent.py`): domain order/item/seller/product. Rule `canceled_order_paid`, `unavailable_order_paid` (dùng `paid_total_brl`/`refunded_total_brl` do payment-agent cung cấp qua coordinator). Điền `order_ids`, `item_ids`, `seller_ids`.
+- `shipment-agent` (`agents/shipment_agent.py`): rule `late_delivery_seller` (seller giao carrier trễ so với `shipping_limit_date` → responsible seller) và `late_delivery_logistics` (seller đúng hạn, carrier trễ so với estimated → responsible logistics_provider). Điền `shipment_ids`.
+- `payment-agent` (`agents/payment_agent.py`): rule `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed`. Đặt `findings["paid_total_brl"]`, `findings["refunded_total_brl"]`. Điền `payment_references`, `refund_lines` (Decimal, 2 số lẻ).
+- `policy-agent` (`agents/policy_agent.py`): đọc policy qua MCP (nếu có tool), quyết định `case_status` + `resolution_actions` (bộ action code cố định, không trùng), emit `policy_decided`.
+
+Mỗi agent chỉ gọi tool thuộc domain của mình, lỗi thì ghi vào `errors` chứ không raise. Mở PR riêng cho nhóm order/shipment và nhóm payment/policy để Sơn và Đạt review song song.
 
 ## Task 2 — Coordinator trong `workflow.py`
 
@@ -112,7 +123,7 @@ Nếu vi phạm không sửa an toàn được → hạ về `primary_issue="ins
 
 ## Task 5 — `ARCHITECTURE.md`
 
-Điền đủ 7 mục theo template, khớp với code thật: sơ đồ luồng, bảng agent ownership (actor ↔ tool được phép gọi ↔ handoff), A2A envelope + điều kiện handoff + chống vòng lặp, evidence lifecycle, bảng failure policy, danh sách invariant của verifier, reproducibility (phiên bản Python, dependency, concurrency, lệnh chạy). Không ghi API key hay prompt bí mật. Phần chi tiết của agent Sơn/Đạt để placeholder `TODO(Sơn)` / `TODO(Đạt)`.
+Điền đủ 7 mục theo template, khớp với code thật: sơ đồ luồng, bảng agent ownership (actor ↔ tool được phép gọi ↔ handoff), A2A envelope + điều kiện handoff + chống vòng lặp, evidence lifecycle, bảng failure policy, danh sách invariant của verifier, reproducibility (phiên bản Python, dependency, concurrency, lệnh chạy). Không ghi API key hay prompt bí mật. Viết luôn phần chi tiết của 4 specialist.
 
 ---
 
@@ -122,4 +133,4 @@ Nếu vi phạm không sửa an toàn được → hạ về `primary_issue="ins
 - [ ] Với fake gateway, `solve_case` trả output pass `contracts.validate_output` và trace pass schema, đủ event bắt buộc đúng thứ tự.
 - [ ] Grep toàn repo không có chuỗi `ev_` nào được hard-code/ghép tạo ra trong source (ngoài test fixture).
 - [ ] Không có file `.env`, input, output, trace hay `dist/` trong commit.
-- [ ] Sơn và Đạt chỉ cần điền logic vào `run()` của agent mình, không phải sửa coordinator.
+- [ ] PR đã được Sơn (order/shipment) và Đạt (payment/policy) review; góp ý đã xử lý.
