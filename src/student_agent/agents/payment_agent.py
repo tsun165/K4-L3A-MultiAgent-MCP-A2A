@@ -128,7 +128,7 @@ class PaymentAgent:
             refund_data = refunds_rec.data if isinstance(refunds_rec.data, dict) else {}
             events = refund_data.get("events")
             refund_events = events if isinstance(events, list) else []
-            if refund_events:
+            if refund_events and bool(topics & {"refund_pending", "refund_failed"}):
                 result.evidence_refs.append(refunds_rec.evidence_ref)
         except Exception as exc:  # noqa: BLE001 - degrade to "no refund data", don't crash
             result.errors.append(f"get_refund_timeline: {type(exc).__name__}: {exc}"[:200])
@@ -233,6 +233,7 @@ class PaymentAgent:
                 result.responsible_parties.append(
                     {"party_type": "payment_provider", "party_id": None}
                 )
+                result.findings["diff_brl"] = float(diff) if diff is not None else 0.0
                 if diff is not None and diff > 0:
                     result.refund_lines.append(
                         {

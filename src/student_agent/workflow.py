@@ -15,22 +15,58 @@ from .mcp_gateway import EvidenceGateway
 from .trace import TraceWriter
 
 # primary_issue -> (case_status, resolution_actions). Kept centralized so every case for
-# the same issue is scored consistently (STANDARDS §6/§7). "has_refund" toggles the
-# refund-vs-no-refund action variant.
+# the same issue is scored consistently (STANDARDS §6/§7). Follows EC_POLICY_V1 policy.
 _ACTION_MAP: dict[str, tuple[str, list[str]]] = {
-    "canceled_order_paid": ("action_required", [vocab.REFUND_FULL]),
-    "unavailable_order_paid": ("action_required", [vocab.REFUND_FULL]),
-    "late_delivery_seller": ("action_required", [vocab.ESCALATE_TO_SELLER]),
-    "late_delivery_logistics": ("action_required", [vocab.ESCALATE_TO_LOGISTICS]),
-    "valid_split_payment": ("no_action", [vocab.EXPLAIN_SPLIT_PAYMENT]),
-    "payment_mismatch": ("action_required", [vocab.REFUND_PARTIAL]),
-    "duplicate_charge": ("action_required", [vocab.REFUND_DUPLICATE_CHARGE]),
-    "refund_pending": ("needs_investigation", [vocab.MONITOR_REFUND]),
-    "refund_failed": ("action_required", [vocab.RETRY_REFUND]),
-    "unsupported_claim": ("no_action", [vocab.REJECT_CLAIM]),
-    "insufficient_evidence": ("needs_investigation", [vocab.REQUEST_MANUAL_REVIEW]),
+    "canceled_order_paid": ("action_required", [vocab.ACTION_ISSUE_REFUND]),
+    "unavailable_order_paid": ("action_required", [vocab.ACTION_ISSUE_REFUND]),
+    "late_delivery_seller": ("action_required", [vocab.ACTION_REFUND_FREIGHT]),
+    "late_delivery_logistics": ("action_required", [vocab.ACTION_REFUND_FREIGHT]),
+    "valid_split_payment": ("no_action", [vocab.ACTION_DOCUMENT_NO_ACTION]),
+    "payment_mismatch": ("action_required", [vocab.ACTION_ISSUE_REFUND]),
+    "duplicate_charge": ("action_required", [vocab.ACTION_ISSUE_REFUND]),
+    "refund_pending": ("action_required", [vocab.ACTION_MONITOR_REFUND]),
+    "refund_failed": ("action_required", [vocab.ACTION_RETRY_REFUND]),
+    "unsupported_claim": ("no_action", [vocab.ACTION_DOCUMENT_NO_ACTION]),
+    "insufficient_evidence": ("needs_investigation", [vocab.ACTION_REQUEST_MANUAL_REVIEW]),
 }
 _ALL_CLAIM_TOPICS = ORDER_TOPICS | SHIPMENT_TOPICS | PAYMENT_TOPICS
+
+_RELEVANT_DOMAINS_BY_ISSUE: dict[str, set[str]] = {
+    "canceled_order_paid": {"order", "item", "payment"},
+    "unavailable_order_paid": {"order", "item", "payment", "seller"},
+    "late_delivery_seller": {"shipment", "order", "item", "seller"},
+    "late_delivery_logistics": {"shipment", "order", "item"},
+    "valid_split_payment": {"payment", "order", "item"},
+    "payment_mismatch": {"payment", "order", "item"},
+    "duplicate_charge": {"payment", "order"},
+    "refund_pending": {"refund", "payment", "order"},
+    "refund_failed": {"refund", "payment", "order"},
+    "unsupported_claim": {"order", "item", "shipment", "payment"},
+    "insufficient_evidence": {"order", "item", "shipment", "payment", "refund", "seller"},
+}
+
+
+def _filter_relevant_evidence(
+    primary_issue: str, candidate_refs: list[str], store: EvidenceStore
+) -> list[str]:
+    """Filter evidence refs to strictly include domains relevant to the primary issue."""
+    allowed_domains = _RELEVANT_DOMAINS_BY_ISSUE.get(primary_issue)
+    if not allowed_domains:
+        return list(dict.fromkeys(candidate_refs))[:30]
+
+    filtered: list[str] = []
+    for ref in candidate_refs:
+        rec = store._records.get(ref)
+        if rec is not None:
+            if rec.domain in allowed_domains:
+                filtered.append(ref)
+        else:
+            filtered.append(ref)
+
+    if not filtered:
+        filtered = candidate_refs
+    return list(dict.fromkeys(filtered))[:30]
+
 
 
 async def solve_case(
@@ -118,8 +154,18 @@ async def solve_case(
     claimed_topics = {c.get("topic") for c in case["customer_request"].get("claims", [])}
     primary_issue, top_score = _resolve_primary_issue(specialist_results, claimed_topics)
     case_status, resolution_actions = _ACTION_MAP.get(
-        primary_issue, ("needs_investigation", [vocab.REQUEST_MANUAL_REVIEW])
+        primary_issue, ("needs_investigation", [vocab.ACTION_REQUEST_MANUAL_REVIEW])
     )
+
+    # Dynamic adjustment for payment_mismatch based on diff
+    if primary_issue == "payment_mismatch":
+        diff_brl = payment_res.findings.get("diff_brl", 0.0)
+        if diff_brl <= 0:
+            case_status = "no_action"
+            resolution_actions = [vocab.ACTION_DOCUMENT_NO_ACTION]
+        else:
+            case_status = "action_required"
+            resolution_actions = [vocab.ACTION_ISSUE_REFUND]
 
     policy_decision_code = {
         "action_required": vocab.POLICY_REFUND_ELIGIBLE,
@@ -138,10 +184,11 @@ async def solve_case(
     ranked_causes = _merge_causes(specialist_results, primary_issue)
     responsible_parties = _merge_parties(specialist_results, primary_issue, merged_entities)
     refund_lines, total_refund = _merge_refunds(specialist_results, case_status)
-    claim_assessments = _build_claim_assessments(case, specialist_results, primary_issue, top_score)
-    supporting_refs = list(
-        dict.fromkeys(ref for res in specialist_results for ref in res.evidence_refs)
-    )[:30]
+    all_refs = list(dict.fromkeys(ref for res in specialist_results for ref in res.evidence_refs))
+    supporting_refs = _filter_relevant_evidence(primary_issue, all_refs, store)
+    claim_assessments = _build_claim_assessments(
+        case, specialist_results, primary_issue, top_score, supporting_refs
+    )
 
     candidate_output: dict[str, Any] = {
         "schema_version": "day09-l3a-output-v2",
@@ -293,6 +340,7 @@ def _build_claim_assessments(
     results: list[SpecialistResult],
     primary_issue: str,
     confidence: float,
+    supporting_refs: list[str],
 ) -> list[dict[str, Any]]:
     claim_check_by_topic: dict[str, str] = {}
     refs_by_topic: dict[str, list[str]] = {}
@@ -315,12 +363,17 @@ def _build_claim_assessments(
             verdict, conf = "insufficient_evidence", 0.25
         else:
             verdict, conf = "unsupported", 0.7
+
+        final_refs = list(dict.fromkeys(refs))
+        if not final_refs:
+            final_refs = supporting_refs
+
         assessments.append(
             {
                 "claim_id": claim_id,
                 "verdict": verdict,
                 "confidence": float(round(conf, 2)),
-                "evidence_refs": list(dict.fromkeys(refs))[:30],
+                "evidence_refs": final_refs[:30],
             }
         )
     return assessments
