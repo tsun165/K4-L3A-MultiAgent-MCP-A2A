@@ -194,7 +194,10 @@ async def test_refund_pending_uses_events_shape(
     contracts.validate_output(output, "refund_pending output")
 
     assert output["assessment"]["primary_issue"] == "refund_pending"
-    assert output["financial_resolution"]["recommended_refund_brl"] == 89.0
+    # get_policy's reference table: refund_pending -> refund_brl 0.0 (monitor, don't
+    # recommend refunding an amount that's already being processed elsewhere).
+    assert output["financial_resolution"]["recommended_refund_brl"] == 0.0
+    assert output["resolution_actions"] == ["MONITOR_REFUND"]
 
 
 @pytest.mark.asyncio

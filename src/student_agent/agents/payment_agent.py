@@ -168,13 +168,17 @@ class PaymentAgent:
         if "refund_pending" in claimed_topics:
             pending_events = [e for e in refund_events if e.get("status") == "pending"]
             if pending_events:
+                # get_policy's own reference table shows refund_pending -> refund_brl 0.0,
+                # recommended_action "monitor_refund": a refund already in flight elsewhere
+                # is not something WE should also recommend refunding again (STANDARDS §11:
+                # do not invent a number the policy itself doesn't call for).
                 self._conclude_refund(
                     result,
                     topic="refund_pending",
                     claimed_topics=claimed_topics,
                     events=pending_events,
                     order_id=order_id,
-                    reason_code=vocab.PENDING_REFUND_MONITORING,
+                    reason_code=None,
                     cause_code=vocab.REFUND_NOT_COMPLETED,
                 )
                 return
