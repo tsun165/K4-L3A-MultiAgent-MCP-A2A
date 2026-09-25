@@ -4,6 +4,7 @@ from typing import Any
 
 from ..trace import TraceWriter
 from .base import EvidenceStore, SpecialistResult
+from .tools import POLICY_TOOLS
 
 
 class PolicyAgent:
@@ -18,10 +19,7 @@ class PolicyAgent:
     """
 
     name: str = "policy-agent"
-    allowed_tools: set[str] = {
-        "get_policy",
-        "check_policy",
-    }
+    allowed_tools: frozenset[str] = POLICY_TOOLS
 
     async def run(
         self,

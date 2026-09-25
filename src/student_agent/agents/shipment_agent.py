@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ..trace import TraceWriter
+from . import vocab
 from .base import EvidenceStore, SpecialistResult
+from .tools import GET_ORDER, GET_ORDER_ITEMS, GET_SHIPMENT_SUMMARY, SHIPMENT_TOOLS
 
 SHIPMENT_TOPICS = {"late_delivery_seller", "late_delivery_logistics"}
 
@@ -22,11 +24,7 @@ class ShipmentAgent:
     """
 
     name: str = "shipment-agent"
-    allowed_tools: set[str] = {
-        "get_shipment_summary",
-        "get_order_items",
-        "get_order",
-    }
+    allowed_tools: frozenset[str] = SHIPMENT_TOOLS
 
     async def run(
         self,
@@ -37,16 +35,27 @@ class ShipmentAgent:
         """Compare carrier handoff vs shipping limits and delivery vs estimated date."""
         del trace  # tool_result_consumed is emitted by EvidenceStore.fetch
         result = SpecialistResult(actor=self.name)
-        topics = {claim.get("topic") for claim in case["customer_request"].get("claims", [])}
-        if not topics & SHIPMENT_TOPICS:
-            return result
+        try:
+            await self._investigate(case, store, result)
+        except Exception as exc:  # specialists never raise (STANDARDS §5)
+            result.errors.append(f"{type(exc).__name__}: {exc}"[:200])
+        return result
 
-        order_id = case["customer_request"]["claimed_order_id"]
-        summary_rec = await store.fetch(self.name, "get_shipment_summary", order_id=order_id)
+    async def _investigate(
+        self, case: dict[str, Any], store: EvidenceStore, result: SpecialistResult
+    ) -> None:
+        topics = {claim.get("topic") for claim in case["customer_request"].get("claims", [])}
+        claimed_topics = topics & SHIPMENT_TOPICS
+        if not claimed_topics:
+            return
+
+        claimed_id = case["customer_request"]["claimed_order_id"]
+        summary_rec = await store.fetch(self.name, GET_SHIPMENT_SUMMARY, order_id=claimed_id)
         summary = summary_rec.data if isinstance(summary_rec.data, dict) else {}
-        if summary.get("order_id") != order_id:
-            result.errors.append("SHIPMENT_NOT_CONFIRMED")
-            return result
+        if not summary.get("order_id") or summary["order_id"] != claimed_id:
+            result.errors.append(vocab.EVIDENCE_UNAVAILABLE)
+            return
+        order_id = summary["order_id"]
 
         carrier_at = _parse(summary.get("delivered_carrier_at"))
         customer_at = _parse(summary.get("delivered_customer_at"))
@@ -55,7 +64,7 @@ class ShipmentAgent:
         if summary.get("order_status") != "delivered" or carrier_at is None or customer_at is None:
             # Canceled / in-transit orders cannot be judged as late deliveries.
             result.findings["delivery_decision"] = "NOT_DELIVERED"
-            return result
+            return
 
         result.entities["order_ids"].append(order_id)
         result.evidence_refs.append(summary_rec.evidence_ref)
@@ -65,7 +74,7 @@ class ShipmentAgent:
         conflicts = [item_id for item_id, row in limits.items() if row["conflict"]]
         if conflicts:
             # Conflicting limit rows: the purchase date bounds which limit is plausible.
-            order_rec = await store.fetch(self.name, "get_order", order_id=order_id)
+            order_rec = await store.fetch(self.name, GET_ORDER, order_id=order_id)
             order = order_rec.data if isinstance(order_rec.data, dict) else {}
             purchased_at = order.get("order_purchase_timestamp")
             if purchased_at:
@@ -85,42 +94,42 @@ class ShipmentAgent:
         else:
             decision = None
         result.findings["delivery_decision"] = decision or "ON_TIME"
-
+        result.findings["claim_check"] = {
+            t: vocab.CLAIM_SUPPORTED if t == decision else vocab.CLAIM_CONTRADICTED
+            for t in claimed_topics
+        }
         if decision is None:
-            result.candidate_issues.append(("unsupported_claim", 0.7))
-            result.cause_codes.append("DELIVERY_ON_TIME")
-            result.responsible_parties.append({"party_type": "customer", "party_id": None})
-            return result
+            return
 
+        result.candidate_issues.append((decision, 0.9))
         refund_items = late_items if late_items else list(limits)
         freight = await self._freight_by_item(store, order_id, limits, result)
-        result.candidate_issues.append((decision, 0.9))
         for item_id in refund_items:
             seller_id = limits[item_id]["seller_id"]
             result.entities["item_ids"].append(item_id)
             if seller_id and seller_id not in result.entities["seller_ids"]:
                 result.entities["seller_ids"].append(seller_id)
             if item_id in freight:
+                # EC_POLICY_V1: late delivery -> refund_freight
                 result.refund_lines.append(
                     {
-                        "reason_code": "refund_freight",
+                        "reason_code": vocab.LATE_DELIVERY_COMPENSATION,
                         "amount_brl": float(freight[item_id]),
                         "entity_id": item_id,
                     }
                 )
 
         if decision == "late_delivery_seller":
-            result.cause_codes.append("SELLER_LATE_HANDOVER")
+            result.cause_codes.append(vocab.SELLER_LATE_HANDOVER)
             result.responsible_parties.extend(
                 {"party_type": "seller", "party_id": seller_id}
                 for seller_id in result.entities["seller_ids"]
             )
         else:
-            result.cause_codes.append("CARRIER_DELIVERY_DELAY")
+            result.cause_codes.append(vocab.CARRIER_LATE_DELIVERY)
             result.responsible_parties.append(
                 {"party_type": "logistics_provider", "party_id": None}
             )
-        return result
 
     async def _freight_by_item(
         self,
@@ -130,7 +139,7 @@ class ShipmentAgent:
         result: SpecialistResult,
     ) -> dict[str, Decimal]:
         """Freight of the item row whose shipping_limit_date matches the selected limit."""
-        items_rec = await store.fetch(self.name, "get_order_items", order_id=order_id)
+        items_rec = await store.fetch(self.name, GET_ORDER_ITEMS, order_id=order_id)
         items = items_rec.data if isinstance(items_rec.data, list) else []
         freight: dict[str, Decimal] = {}
         for item in items:
@@ -140,7 +149,9 @@ class ShipmentAgent:
                 and item.get("shipping_limit_date") == row["limit"]
                 and item.get("freight_value")
             ):
-                freight[item["order_item_id"]] = Decimal(str(item["freight_value"]))
+                freight[item["order_item_id"]] = Decimal(str(item["freight_value"])).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
         if freight:
             result.evidence_refs.append(items_rec.evidence_ref)
         return freight

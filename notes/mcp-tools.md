@@ -92,23 +92,23 @@ Chung: `order_id = claimed_order_id`. Nếu `get_order` lỗi / not found / `ord
 | Issue | Điều kiện | cause_code | responsible |
 |---|---|---|---|
 | `canceled_order_paid` | `order_status == "canceled"` **và** payment agent xác nhận đã trả > đã hoàn | `ORDER_CANCELED_AFTER_PAYMENT` | `platform` / `null` |
-| `unavailable_order_paid` | `order_status == "unavailable"` **và** đã trả > đã hoàn | `ITEM_UNAVAILABLE_AFTER_PAYMENT` | `seller` / seller_id |
+| `unavailable_order_paid` | `order_status == "unavailable"` **và** đã trả > đã hoàn | `ORDER_UNAVAILABLE_AFTER_PAYMENT` | `seller` / seller_id |
 
-- refund = paid − already_refunded (từ payment agent), `refund_lines[].reason_code` = `issue_refund`, `entity_id` = order_id.
+- refund = paid − already_refunded (từ payment agent), `reason_code` = `CANCELED_ORDER_REFUND` / `UNAVAILABLE_ORDER_REFUND`, `entity_id` = order_id.
 - Nếu đã hoàn đủ → không còn là issue này (có thể coordinator chuyển sang `refund_pending`/`no_action`).
 - Evidence cần: `get_order` (status) + payment evidence (của @Liber72). Thêm `get_order_items`/`get_sellers` nếu cần seller_id (unavailable).
 
-### Shipment agent (`get_shipment_summary`)
+### Shipment agent (`get_shipment_summary`, `get_order_items`, `get_order`)
 Ký hiệu: `limit` = shipping_limit_at đã chọn theo mục 3.1, `carrier` = delivered_carrier_at, `customer` = delivered_customer_at, `eta` = estimated_delivery_at.
 
 | Issue | Điều kiện | cause_code | responsible |
 |---|---|---|---|
 | `late_delivery_seller` | `carrier > limit` | `SELLER_LATE_HANDOVER` | `seller` / seller_id của item trễ |
-| `late_delivery_logistics` | `carrier <= limit` **và** `customer > eta` | `CARRIER_DELIVERY_DELAY` | `logistics_provider` / `null` |
-| (không trễ) | `carrier <= limit` và (`customer <= eta` hoặc chưa giao mà chưa quá eta) | — | báo `unsupported_claim` cho coordinator |
+| `late_delivery_logistics` | `carrier <= limit` **và** `customer > eta` | `CARRIER_LATE_DELIVERY` | `logistics_provider` / `null` |
+| (không trễ) | `carrier <= limit` và (`customer <= eta` hoặc chưa giao mà chưa quá eta) | — | `findings["claim_check"]` = `CLAIM_CONTRADICTED`; coordinator quyết định `unsupported_claim` |
 
 - Seller trễ **và** khách nhận trễ → ưu tiên `late_delivery_seller`.
-- refund = `freight_value` của item trễ (dòng item được chọn), `reason_code` = `refund_freight`, `entity_id` = order_item_id.
+- refund = `freight_value` của item trễ (dòng item được chọn), `reason_code` = `LATE_DELIVERY_COMPENSATION` (policy: `refund_freight`), `entity_id` = order_item_id.
 - `order_status` phải là `delivered`/có `delivered_customer_at`; nếu `canceled` thì không kết luận late delivery (bẫy của case 001).
 - Kiểm tra với case 003: carrier 02-26 > limit 02-22 → `late_delivery_seller`, seller `seller-71303d7e93b3`, freight 18 ✔ khớp claim.
 
@@ -129,4 +129,5 @@ Mỗi response được dùng → `tool_result_consumed`, `actor="order-agent"`/
 | 004 | late_delivery_logistics | `late_delivery_logistics`, freight 18 (sau khi sửa rule chọn limit) |
 
 ## 7. Còn mở
+- Theo STANDARDS: tên tool chỉ lấy từ `agents/tools.py`, mã chuẩn lấy từ `agents/vocab.py`. Specialist không đề xuất `unsupported_claim` mà ghi `findings["claim_check"][topic]` = `CLAIM_SUPPORTED`/`CLAIM_CONTRADICTED` để coordinator đọc.
 - Refund của canceled/unavailable cần `payment_res.findings["paid_total_brl"/"refunded_total_brl"]`. Payment agent trên nhánh của Khoa vẫn là skeleton, còn bản của Đạt (nhánh `hoangthaidat`) dùng interface `SpecialistResult` khác.

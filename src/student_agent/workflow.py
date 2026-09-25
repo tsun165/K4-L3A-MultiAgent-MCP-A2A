@@ -73,21 +73,6 @@ async def solve_case(
         _safe_run(shipment_agent),
         _safe_run(payment_agent),
     )
-    order_res, shipment_res, payment_res = specialist_results
-
-    # 4b. Payment totals complete order-agent's canceled/unavailable refund decision
-    if order_res.findings.get("refund_pending_payment_totals"):
-        send(
-            AgentMessage(
-                case_id=case_id,
-                sender=payment_agent.name,
-                recipient=order_agent.name,
-                task="payment_totals",
-                evidence_refs=payment_res.evidence_refs,
-            ),
-            trace,
-        )
-        order_agent.apply_payment_totals(order_res, payment_res)
 
     # 5. Handoff results from each specialist back to coordinator
     for res in specialist_results:
@@ -100,6 +85,8 @@ async def solve_case(
             evidence_refs=res.evidence_refs,
         )
         send(msg, trace)
+
+    order_res, shipment_res, payment_res = specialist_results
 
     # 6. Policy evaluation
     trace.emit(

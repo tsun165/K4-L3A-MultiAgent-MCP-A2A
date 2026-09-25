@@ -6,9 +6,11 @@ from typing import Any
 
 import pytest
 
+from student_agent.agents import vocab
 from student_agent.agents.base import EvidenceStore, SpecialistResult
 from student_agent.agents.order_agent import OrderAgent
 from student_agent.agents.shipment_agent import ShipmentAgent, select_shipping_limits
+from student_agent.agents.tools import ALL_TOOLS
 from student_agent.contracts import Contracts
 from student_agent.trace import TraceWriter
 
@@ -146,13 +148,14 @@ async def test_canceled_order_paid_refunds_outstanding_payment(trace: TraceWrite
     assert res.entities["item_ids"] == [ITEM_ID]
     assert res.entities["seller_ids"] == [SELLER_ID]
     assert res.evidence_refs == [_ref("get_order"), _ref("get_order_items")]
+    assert res.findings["claim_check"] == {"canceled_order_paid": vocab.CLAIM_SUPPORTED}
 
     payment = SpecialistResult(
         actor="payment-agent", findings={"paid_total_brl": 97.0, "refunded_total_brl": 0}
     )
     agent.apply_payment_totals(res, payment)
     assert res.refund_lines == [
-        {"reason_code": "issue_refund", "amount_brl": 97.0, "entity_id": ORDER_ID}
+        {"reason_code": "CANCELED_ORDER_REFUND", "amount_brl": 97.0, "entity_id": ORDER_ID}
     ]
 
 
@@ -174,15 +177,27 @@ async def test_unavailable_order_paid_blames_seller(trace: TraceWriter) -> None:
         OrderAgent(), "unavailable_order_paid", trace, get_order={"order_status": "unavailable"}
     )
     assert res.candidate_issues == [("unavailable_order_paid", 0.9)]
-    assert res.cause_codes == ["ITEM_UNAVAILABLE_AFTER_PAYMENT"]
+    assert res.cause_codes == ["ORDER_UNAVAILABLE_AFTER_PAYMENT"]
     assert res.responsible_parties == [{"party_type": "seller", "party_id": SELLER_ID}]
     assert _ref("get_sellers") in res.evidence_refs
 
 
 @pytest.mark.asyncio
-async def test_cancel_claim_on_delivered_order_is_unsupported(trace: TraceWriter) -> None:
+async def test_cancel_claim_on_delivered_order_is_contradicted(trace: TraceWriter) -> None:
+    # unsupported_claim is the coordinator's call; the agent only reports the contradiction.
     res = await _run(OrderAgent(), "canceled_order_paid", trace)
-    assert res.candidate_issues == [("unsupported_claim", 0.7)]
+    assert res.candidate_issues == []
+    assert res.findings["claim_check"] == {"canceled_order_paid": vocab.CLAIM_CONTRADICTED}
+    assert res.evidence_refs == [_ref("get_order"), _ref("get_order_items")]
+
+
+@pytest.mark.asyncio
+async def test_missing_payment_totals_adds_no_refund(trace: TraceWriter) -> None:
+    agent = OrderAgent()
+    res = await _run(agent, "canceled_order_paid", trace, get_order={"order_status": "canceled"})
+    agent.apply_payment_totals(res, SpecialistResult(actor="payment-agent"))
+    assert res.refund_lines == []
+    assert res.candidate_issues == [("canceled_order_paid", 0.9)]
 
 
 @pytest.mark.asyncio
@@ -197,7 +212,7 @@ async def test_order_agent_stays_silent_on_other_topics(trace: TraceWriter) -> N
 @pytest.mark.asyncio
 async def test_order_agent_ignores_unconfirmed_order(trace: TraceWriter) -> None:
     res = await _run(OrderAgent(), "canceled_order_paid", trace, get_order={"order_id": "other"})
-    assert res.errors == ["ORDER_NOT_CONFIRMED"]
+    assert res.errors == ["EVIDENCE_UNAVAILABLE"]
     assert res.evidence_refs == []
     assert res.entities["order_ids"] == []
 
@@ -221,7 +236,7 @@ async def test_late_delivery_seller_uses_limit_known_at_case_open(trace: TraceWr
     assert res.cause_codes == ["SELLER_LATE_HANDOVER"]
     assert res.responsible_parties == [{"party_type": "seller", "party_id": SELLER_ID}]
     assert res.refund_lines == [
-        {"reason_code": "refund_freight", "amount_brl": 18.0, "entity_id": ITEM_ID}
+        {"reason_code": "LATE_DELIVERY_COMPENSATION", "amount_brl": 18.0, "entity_id": ITEM_ID}
     ]
     assert res.entities["item_ids"] == [ITEM_ID]
     assert res.entities["shipment_ids"] == []
@@ -266,10 +281,10 @@ async def test_late_delivery_logistics_when_seller_on_time(trace: TraceWriter) -
         get_shipment_summary={"delivered_customer_at": "2018-03-05T09:00:00-03:00"},
     )
     assert res.candidate_issues == [("late_delivery_logistics", 0.9)]
-    assert res.cause_codes == ["CARRIER_DELIVERY_DELAY"]
+    assert res.cause_codes == ["CARRIER_LATE_DELIVERY"]
     assert res.responsible_parties == [{"party_type": "logistics_provider", "party_id": None}]
     assert res.refund_lines == [
-        {"reason_code": "refund_freight", "amount_brl": 18.0, "entity_id": ITEM_ID}
+        {"reason_code": "LATE_DELIVERY_COMPENSATION", "amount_brl": 18.0, "entity_id": ITEM_ID}
     ]
 
 
@@ -285,13 +300,16 @@ async def test_seller_late_wins_over_carrier_late(trace: TraceWriter) -> None:
         },
     )
     assert res.candidate_issues == [("late_delivery_seller", 0.9)]
+    assert res.findings["claim_check"] == {"late_delivery_logistics": vocab.CLAIM_CONTRADICTED}
 
 
 @pytest.mark.asyncio
-async def test_on_time_delivery_is_unsupported_claim(trace: TraceWriter) -> None:
+async def test_on_time_delivery_contradicts_claim(trace: TraceWriter) -> None:
     res = await _run(ShipmentAgent(), "late_delivery_logistics", trace)
-    assert res.candidate_issues == [("unsupported_claim", 0.7)]
+    assert res.candidate_issues == []
+    assert res.findings["claim_check"] == {"late_delivery_logistics": vocab.CLAIM_CONTRADICTED}
     assert res.refund_lines == []
+    assert _ref("get_shipment_summary") in res.evidence_refs
 
 
 @pytest.mark.asyncio
@@ -332,3 +350,27 @@ def test_select_shipping_limits_falls_back_to_earliest() -> None:
     selected = select_shipping_limits(rows, "2018-01-01T00:00:00-03:00")
     assert selected["i1"]["limit"] == "2018-04-01T00:00:00-03:00"
     assert selected["i1"]["conflict"] is True
+
+
+@pytest.mark.asyncio
+async def test_specialists_do_not_raise_on_tool_error(trace: TraceWriter) -> None:
+    class BrokenGateway:
+        async def call(self, tool_name: str, *, case_id: str, **arguments: str) -> dict[str, Any]:
+            raise RuntimeError("MCP tool failed: not found")
+
+    for agent in (OrderAgent(), ShipmentAgent()):
+        store = EvidenceStore("L3A_CASE_900", BrokenGateway(), trace)
+        res = await agent.run(
+            _case("late_delivery_seller", "2018-03-03T09:00:00-03:00"), store, trace
+        )
+        assert res.errors and res.candidate_issues == [] and res.evidence_refs == []
+
+
+def test_tool_registry_matches_notes() -> None:
+    notes = (Path(__file__).resolve().parents[1] / "notes" / "mcp-tools.md").read_text(
+        encoding="utf-8"
+    )
+    missing = sorted(name for name in ALL_TOOLS if f"`{name}`" not in notes)
+    assert missing == []
+    for agent in (OrderAgent(), ShipmentAgent()):
+        assert agent.allowed_tools <= ALL_TOOLS

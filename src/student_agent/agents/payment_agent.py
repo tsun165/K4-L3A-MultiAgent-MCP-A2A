@@ -4,6 +4,7 @@ from typing import Any
 
 from ..trace import TraceWriter
 from .base import EvidenceStore, SpecialistResult
+from .tools import PAYMENT_TOOLS
 
 
 class PaymentAgent:
@@ -23,11 +24,7 @@ class PaymentAgent:
     """
 
     name: str = "payment-agent"
-    allowed_tools: set[str] = {
-        "get_payment",
-        "get_refund",
-        "get_payment_transactions",
-    }
+    allowed_tools: frozenset[str] = PAYMENT_TOOLS
 
     async def run(
         self,
