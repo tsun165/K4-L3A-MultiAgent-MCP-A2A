@@ -4,7 +4,7 @@
 
 ---
 
-## 0. Hiện trạng repo
+## 0. Hiện trạng repo (cập nhật 25/09/2026 ~11:00)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -12,9 +12,21 @@
 | `EvidenceGateway.call()` — gọi tool MCP, validate evidence envelope | ✅ Có sẵn |
 | `TraceWriter.emit()` — ghi trace, validate schema | ✅ Có sẵn |
 | CLI tự emit `case_received` (trước) và `case_finalized` (sau) mỗi case | ✅ Có sẵn |
-| `solve_case()` | ❌ `NotImplementedError` — **việc chính** |
-| `ARCHITECTURE.md` | ❌ Toàn `TODO` — phải điền |
-| `.env`, `case-set.json`, `inputs/*.json` | ❌ Chưa có — cần đăng ký team + tải release |
+| `notes/mcp-tools.md` — 10 tools chính thức + field mapping | ✅ Đã ghi đầy đủ |
+| `agents/payment_agent.py` — PaymentAgent (440 dòng) | ✅ Đã implement |
+| `agents/policy_agent.py` — PolicyAgent (230 dòng) | ✅ Đã implement |
+| `agents/specialist_result.py` — SpecialistResult + RefundLine | ✅ Đã implement |
+| `.env` — MCP server config | ✅ Đã cấu hình |
+| `ARCHITECTURE.md` — mục Payment/Policy agent | ✅ Đã điền (Appendix A, B) |
+| `ARCHITECTURE.md` — mục 1–7 (overview, ownership, A2A…) | ⚠️ Còn TODO |
+| `solve_case()` trong `workflow.py` | ❌ `NotImplementedError` — **blocker chính** |
+| `agents/base.py` — EvidenceStore, AgentMessage | ❌ Chưa tạo |
+| `agents/order_agent.py` | ❌ Chưa tạo |
+| `agents/shipment_agent.py` | ❌ Chưa tạo |
+| `agents/verifier.py` | ❌ Chưa tạo |
+| `rules.py` — bảng quyết định tập trung | ❌ Chưa tạo |
+| Unit tests cho agents/verifier | ❌ Chỉ có test starter |
+| `case-set.json`, `inputs/*.json` | ❌ Chưa có — cần tải release |
 
 ---
 
@@ -79,18 +91,18 @@ Bỏ nếu thiếu giờ: unit test chi tiết (giữ smoke test), chạy song s
 
 ### Giai đoạn 1 — Setup & khám phá (phút 0–30) — cả nhóm
 
-- [ ] **Cả 3:** tạo venv Python 3.11, `pip install -e ".[dev]"`, `pytest -q` pass.
-- [ ] **Khoa:** đăng ký team trên `/register`, chia sẻ `sk-team-...` cho nhóm qua kênh riêng (không commit, không dán vào issue/PR).
+- [x] **Cả 3:** tạo venv Python 3.11, `pip install -e ".[dev]"`, `pytest -q` pass.
+- [x] **Khoa:** đăng ký team trên `/register`, chia sẻ `sk-team-...` cho nhóm qua kênh riêng (không commit, không dán vào issue/PR).
 - [ ] **Khoa:** tải ZIP input L3A từ GitHub Release, `day09 validate-inputs` → `OK: l3a / ... / 100 cases`, chia sẻ cho nhóm.
-- [ ] **Khoa:** `day09 mcp-tools` → ghi lại danh sách tool thực tế (tên, tham số) vào `notes/mcp-tools.md`.
+- [x] **Khoa:** `day09 mcp-tools` → ghi lại danh sách tool thực tế (tên, tham số) vào `notes/mcp-tools.md`.
 - [ ] Khám phá dữ liệu (script để trong `scripts/`, không nộp):
   - **Khoa:** đọc ~10–15 case input — các field có gì (customer message, order_id, claim…)?
   - **Antigravity:** gọi thử tool domain `order`, `item`, `seller`, `product`, `shipment` cho 2–3 case, dump `data` + `warnings`.
   - **Antigravity:** gọi thử tool domain `payment`, `refund`, `policy`, `customer` cho 2–3 case, dump `data` + `warnings`.
   - ⚠️ Mọi call đều bị audit → khám phá có chừng mực, dùng đúng `case_id`.
-- [ ] **Antigravity:** ghi mapping domain ↔ tool ↔ field quan trọng vào `notes/mcp-tools.md`.
+- [x] **Antigravity:** ghi mapping domain ↔ tool ↔ field quan trọng vào `notes/mcp-tools.md`.
 
-**Deliverable:** `notes/mcp-tools.md` + cả nhóm hiểu rõ input format.
+**Deliverable:** `notes/mcp-tools.md` ✅ + cả nhóm hiểu rõ input format.
 
 ### Giai đoạn 2 — Khung multi-agent + trace (phút 15–70) — Khoa chính
 
@@ -108,22 +120,22 @@ agents/
 rules.py           # bảng quyết định primary_issue / cause / responsible
 ```
 
-- [ ] **Khoa:** **EvidenceStore** (khởi tạo mới mỗi case): lưu `{evidence_ref, domain, tool, data, warnings}`; chỉ nó được phép cấp ref cho output.
-- [ ] **Khoa:** **A2A envelope**: `{case_id, from, to, task, payload, evidence_refs}`; mỗi handoff emit trace `handoff` (actor → target).
-- [ ] **Khoa:** định nghĩa `SpecialistResult` + skeleton rỗng cho 4 specialist (logic thật ở Task 1b).
-- [ ] **Khoa:** **Phân quyền tool**: mỗi specialist chỉ gọi tool thuộc domain của mình.
-- [ ] **Antigravity:** trong mỗi specialist, gọi tool qua EvidenceStore và emit `tool_result_consumed` mỗi khi dùng evidence.
+- [ ] **Khoa:** **EvidenceStore** (khởi tạo mới mỗi case): lưu `{evidence_ref, domain, tool, data, warnings}`; chỉ nó được phép cấp ref cho output. ❌ *Chưa tạo `agents/base.py`*
+- [ ] **Khoa:** **A2A envelope**: `{case_id, from, to, task, payload, evidence_refs}`; mỗi handoff emit trace `handoff` (actor → target). ❌ *Chưa tạo `AgentMessage`*
+- [x] **Khoa:** định nghĩa `SpecialistResult` + skeleton rỗng cho 4 specialist (logic thật ở Task 1b). → `specialist_result.py` ✅ (nhưng chỉ có 2/4 agent: payment, policy)
+- [ ] **Khoa:** **Phân quyền tool**: mỗi specialist chỉ gọi tool thuộc domain của mình. ⚠️ *Payment/Policy agent tự gọi gateway trực tiếp, chưa có phân quyền chính thức*
+- [x] **Antigravity:** trong mỗi specialist, gọi tool qua EvidenceStore và emit `tool_result_consumed` mỗi khi dùng evidence. → Payment/Policy agent đã emit ✅
 - [ ] Trace mỗi case theo thứ tự:
-  1. `case_received` (CLI đã emit)
-  2. `task_assigned` coordinator → từng specialist
-  3. `tool_result_consumed` mỗi khi dùng evidence (kèm `tool_name`, `evidence_refs`)
-  4. `handoff` specialist → coordinator / → policy / → verifier
-  5. `policy_decided` (policy-agent, `decision_code`)
-  6. `verification_completed` (verifier, `decision_code=PASS/FAIL`)
-  7. `case_finalized` (CLI đã emit)
-- [ ] Không ghi prompt / chain-of-thought vào trace, chỉ ghi decision code.
+  1. `case_received` (CLI đã emit) ✅
+  2. `task_assigned` coordinator → từng specialist ❌ *workflow.py chưa implement*
+  3. `tool_result_consumed` mỗi khi dùng evidence (kèm `tool_name`, `evidence_refs`) ✅ *Payment/Policy agent đã emit*
+  4. `handoff` specialist → coordinator / → policy / → verifier ❌
+  5. `policy_decided` (policy-agent, `decision_code`) ✅ *Policy agent đã emit*
+  6. `verification_completed` (verifier, `decision_code=PASS/FAIL`) ❌ *Chưa có verifier*
+  7. `case_finalized` (CLI đã emit) ✅
+- [ ] Không ghi prompt / chain-of-thought vào trace, chỉ ghi decision code. ✅ *Các agent hiện tại tuân thủ*
 
-**Deliverable:** `day09 run` chạy hết 100 case với output tối thiểu pass schema (`primary_issue=insufficient_evidence`, confidence thấp) nhưng dùng evidence thật; `day09 validate` pass.
+**Deliverable:** `day09 run` chạy hết 100 case — ❌ **Chưa đạt**, `workflow.py` vẫn raise `NotImplementedError`.
 
 ### Giai đoạn 3 — Logic nghiệp vụ (phút 30–70, tinh chỉnh 85–110) — trọng tâm 45%, Antigravity code, Sơn/Đạt review
 
@@ -149,30 +161,30 @@ Xây bảng quyết định cho 11 giá trị `primary_issue`:
 
 Các việc cụ thể:
 
-- [ ] **Antigravity** (review: Đạt): chuẩn hoá tiền tệ: dùng `Decimal`, làm tròn 2 chữ số; `recommended_refund_brl == sum(refund_lines.amount_brl)`.
-- [ ] **Antigravity** (review: Sơn): `affected_entities`: chỉ đưa ID xuất hiện trong evidence của case (không lấy từ customer message nếu MCP không xác nhận). Bổ sung `payment_references`.
-- [ ] **Khoa:** `claim_assessments`: tách các claim trong message khách → verdict + evidence riêng.
-- [ ] **Antigravity** (review: Sơn/Đạt): `root_cause_analysis.ranked_causes`: cause code UPPER_SNAKE, rank 1..n; `responsible_parties` nhất quán với issue
-- [ ] **Khoa:** `data_conflicts`: khi 2 nguồn lệch nhau (vd. message nói 200 BRL, payment nói 150) → ghi `field`, `sources`, `selected_source` (ưu tiên MCP), `resolution_code`.
-- [ ] **Antigravity** (review: Đạt): `resolution_actions`: bộ action code cố định, không trùng, khớp status (`no_action` ⇒ không có action refund).
-- [ ] **Antigravity** (review: Đạt): policy agent đọc policy từ MCP (nếu có tool policy) để quyết định cửa sổ refund / trách nhiệm.
-- [ ] **Khoa:** `evidence_refs` top-level: chỉ những ref **thực sự hỗ trợ kết luận** (precision quan trọng — đừng dump mọi ref đã gọi).
+- [x] **Antigravity** (review: Đạt): chuẩn hoá tiền tệ: dùng `Decimal`, làm tròn 2 chữ số; `recommended_refund_brl == sum(refund_lines.amount_brl)`. → `payment_agent.py` ✅
+- [ ] **Antigravity** (review: Sơn): `affected_entities`: chỉ đưa ID xuất hiện trong evidence của case (không lấy từ customer message nếu MCP không xác nhận). Bổ sung `payment_references`. ⚠️ *Payment agent điền `payment_references`, nhưng order/shipment agent chưa có để điền `order_ids`, `item_ids`, `seller_ids`, `shipment_ids`*
+- [ ] **Khoa:** `claim_assessments`: tách các claim trong message khách → verdict + evidence riêng. ❌
+- [ ] **Antigravity** (review: Sơn/Đạt): `root_cause_analysis.ranked_causes`: cause code UPPER_SNAKE, rank 1..n; `responsible_parties` nhất quán với issue ❌
+- [ ] **Khoa:** `data_conflicts`: khi 2 nguồn lệch nhau (vd. message nói 200 BRL, payment nói 150) → ghi `field`, `sources`, `selected_source` (ưu tiên MCP), `resolution_code`. ❌
+- [x] **Antigravity** (review: Đạt): `resolution_actions`: bộ action code cố định, không trùng, khớp status (`no_action` ⇒ không có action refund). → `payment_agent.py` + `policy_agent.py` ✅
+- [x] **Antigravity** (review: Đạt): policy agent đọc policy từ MCP (nếu có tool policy) để quyết định cửa sổ refund / trách nhiệm. → `policy_agent.py` ✅
+- [ ] **Khoa:** `evidence_refs` top-level: chỉ những ref **thực sự hỗ trợ kết luận** (precision quan trọng — đừng dump mọi ref đã gọi). ❌ *Cần coordinator tổng hợp*
 
 ### Giai đoạn 4 — Verifier & calibration (phút 30–110) — Khoa chính
 
 Verifier kiểm trước khi trả output:
 
-- [ ] Schema pass (`contracts.validate_output`).
-- [ ] Mọi ref trong output ⊆ EvidenceStore của case hiện tại.
-- [ ] Mỗi ref trong output đều đã xuất hiện trong trace `tool_result_consumed` của case.
-- [ ] Tổng tiền khớp; refund ≤ số tiền đã trả.
-- [ ] `case_status` ↔ refund ↔ actions nhất quán (vd. `no_action` ⇒ refund = 0).
-- [ ] `responsible_parties` seller có `party_id` = seller_id trong evidence.
-- [ ] Nếu fail → hạ về `needs_investigation` + confidence thấp, không bịa.
+- [ ] Schema pass (`contracts.validate_output`). ❌ *Chưa có verifier.py*
+- [ ] Mọi ref trong output ⊆ EvidenceStore của case hiện tại. ❌
+- [ ] Mỗi ref trong output đều đã xuất hiện trong trace `tool_result_consumed` của case. ❌
+- [ ] Tổng tiền khớp; refund ≤ số tiền đã trả. ❌
+- [ ] `case_status` ↔ refund ↔ actions nhất quán (vd. `no_action` ⇒ refund = 0). ❌
+- [ ] `responsible_parties` seller có `party_id` = seller_id trong evidence. ❌
+- [ ] Nếu fail → hạ về `needs_investigation` + confidence thấp, không bịa. ❌
 
 Calibration:
 
-- [ ] Confidence theo độ chắc của rule: ví dụ ~0.9 khi tín hiệu rõ + đủ evidence, ~0.6 khi có conflict, ~0.3 khi thiếu dữ liệu. Điều chỉnh sau khi xem điểm public.
+- [ ] Confidence theo độ chắc của rule: ví dụ ~0.9 khi tín hiệu rõ + đủ evidence, ~0.6 khi có conflict, ~0.3 khi thiếu dữ liệu. Điều chỉnh sau khi xem điểm public. ❌
 
 ### Giai đoạn 5 — Failure policy & độ bền (phút 70–110) — Khoa chính, Sơn/Đạt xử lý lỗi trong agent của mình
 
@@ -183,18 +195,18 @@ Calibration:
 | Source conflict | Không | Ưu tiên nguồn MCP có thẩm quyền, ghi `data_conflicts` | `decision_code=SOURCE_CONFLICT` |
 | Specialist trả kết quả không hợp lệ | Không | Verifier đánh `needs_investigation` | `verification_completed` FAIL |
 
-- [ ] Một case lỗi không được làm sập cả run (bắt exception trong `solve_case`, vẫn trả output hợp lệ từ evidence đã có).
-- [ ] Cân nhắc chạy song song có giới hạn (semaphore 4–8) nếu 100 case chạy chậm — lưu ý CLI hiện chạy tuần tự.
+- [ ] Một case lỗi không được làm sập cả run (bắt exception trong `solve_case`, vẫn trả output hợp lệ từ evidence đã có). ❌
+- [ ] Cân nhắc chạy song song có giới hạn (semaphore 4–8) nếu 100 case chạy chậm — lưu ý CLI hiện chạy tuần tự. ❌
 
 ### Giai đoạn 6 — Test, tài liệu, nộp bài (phút 70–120)
 
-- [ ] **Sơn:** viết/chạy unit test cho rule order/shipment với fixture data giả (chỉ để test logic, **không** dùng làm output).
-- [ ] **Đạt:** viết/chạy unit test cho rule payment/refund/policy + tính tiền.
-- [ ] **Khoa:** test verifier: ref lạ bị chặn, tổng tiền lệch bị bắt.
-- [ ] **Khoa** (Sơn/Đạt review): điền đầy đủ `ARCHITECTURE.md` (7 mục: overview, ownership, A2A, evidence lifecycle, failure policy, invariants, reproducibility).
-- [ ] **Khoa:** `day09 run` → `day09 validate` → `day09 package --output dist/submission.zip`.
-- [ ] **Khoa:** kiểm tra ZIP chỉ gồm `manifest.json`, `trace.jsonl`, `outputs/*.json` (không source, `.env`, key, log).
-- [ ] **Khoa:** upload tại `/l3a`, chia sẻ breakdown điểm public cho nhóm → quay lại Giai đoạn 3–4 tinh chỉnh.
+- [ ] **Sơn:** viết/chạy unit test cho rule order/shipment với fixture data giả (chỉ để test logic, **không** dùng làm output). ❌
+- [ ] **Đạt:** viết/chạy unit test cho rule payment/refund/policy + tính tiền. ❌
+- [ ] **Khoa:** test verifier: ref lạ bị chặn, tổng tiền lệch bị bắt. ❌
+- [ ] **Khoa** (Sơn/Đạt review): điền đầy đủ `ARCHITECTURE.md` (7 mục: overview, ownership, A2A, evidence lifecycle, failure policy, invariants, reproducibility). ⚠️ *Chỉ có Appendix A (Payment) và B (Policy) đã điền*
+- [ ] **Khoa:** `day09 run` → `day09 validate` → `day09 package --output dist/submission.zip`. ❌ *`day09 run` crash do `NotImplementedError`*
+- [ ] **Khoa:** kiểm tra ZIP chỉ gồm `manifest.json`, `trace.jsonl`, `outputs/*.json` (không source, `.env`, key, log). ❌
+- [ ] **Khoa:** upload tại `/l3a`, chia sẻ breakdown điểm public cho nhóm → quay lại Giai đoạn 3–4 tinh chỉnh. ❌
 
 ---
 
@@ -213,6 +225,30 @@ Calibration:
 
 - [ ] Không có `evidence_ref` tự tạo / sửa / dùng chéo case.
 - [ ] Mọi case có `case_id` đúng.
-- [ ] `.env` và API key không nằm trong git hay ZIP.
+- [x] `.env` và API key không nằm trong git hay ZIP. ✅ *`.gitignore` đã loại `.env`*
 - [ ] Trace có đủ 5 event bắt buộc cho **mọi** case, đúng thứ tự.
 - [ ] Customer message không được coi là ground truth.
+
+---
+
+## 5. Tổng kết tiến độ (25/09/2026)
+
+### ✅ Đã hoàn thành
+- `agents/payment_agent.py` — 440 dòng, 5 issue type, Decimal, refund_lines, trace events
+- `agents/policy_agent.py` — 230 dòng, policy MCP, `policy_decided` event, decision codes
+- `agents/specialist_result.py` — SpecialistResult + RefundLine dataclass
+- `notes/mcp-tools.md` — 10 tools chính thức + field mapping + action codes
+- `ARCHITECTURE.md` Appendix A (Payment) + B (Policy)
+- `.env` cấu hình MCP server
+- `.gitignore` loại `.env`, inputs, outputs, traces, `l3a-inputs-*/`
+
+### ❌ Chưa làm (theo thứ tự ưu tiên)
+1. **`workflow.py`** — Coordinator `solve_case()` ← **BLOCKER**, không có thì không chạy được `day09 run`
+2. **`agents/base.py`** — EvidenceStore, AgentMessage (A2A envelope)
+3. **`agents/order_agent.py`** — rule `canceled_order_paid`, `unavailable_order_paid`
+4. **`agents/shipment_agent.py`** — rule `late_delivery_seller`, `late_delivery_logistics`
+5. **`agents/verifier.py`** — kiểm tra invariants trước finalize
+6. **`rules.py`** — bảng quyết định tập trung (tùy chọn, có thể inline trong từng agent)
+7. **`ARCHITECTURE.md`** mục 1–7 (overview, ownership, A2A, evidence lifecycle…)
+8. **Unit tests** — test agents, verifier, workflow
+9. **Tải input data** — `case-set.json`, `inputs/*.json`

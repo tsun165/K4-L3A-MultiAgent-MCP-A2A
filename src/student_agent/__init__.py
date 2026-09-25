@@ -1,0 +1,2 @@
+VARIANT_ID = "l3a"
+OUTPUT_SCHEMA_VERSION = "day09-l3a-output-v2"
