@@ -2,6 +2,15 @@
 
 > Mục tiêu: hoàn thiện `solve_case()` trong `src/student_agent/workflow.py` để điều tra 100 case khiếu nại TMĐT (dữ liệu kiểu Olist), lấy evidence thật qua MCP Gateway, phối hợp nhiều agent, sinh `outputs/<case_id>.json` + `traces/trace.jsonl` đúng contract, rồi đóng gói nộp.
 
+## 📍 Trạng thái hiện tại (2026-09-25, cập nhật gần nhất)
+
+- ✅ Code hoàn chỉnh trên `main`: interface, coordinator, verifier, calibration, 4 specialist agent (order/shipment/payment/policy), tool registry, mã chuẩn — Claude Code viết toàn bộ (xem `STANDARDS.md` §1).
+- ✅ `pytest -q` + `ruff check src tests`: pass.
+- ✅ MCP Gateway đã chạy được (sự cố trước đó là do `.env` gõ nhầm 1 ký tự trong key, không phải lỗi hệ thống — xem `notes/mcp-tools.md`).
+- ✅ Đã chạy `day09 run` full 100 case với MCP thật, `day09 validate` pass, đang chạy lại lần 2 sau khi vá bug payment-agent (xét nhầm topic không được claim).
+- 📄 `ARCHITECTURE.md` và `notes/mcp-tools.md` đã cập nhật theo dữ liệu MCP thật.
+- ⏭️ Tiếp theo: soát phân bố `primary_issue` của lần chạy mới, `day09 package`, xác nhận với Khoa trước khi bấm nộp trên workspace.
+
 ---
 
 ## 0. Hiện trạng repo

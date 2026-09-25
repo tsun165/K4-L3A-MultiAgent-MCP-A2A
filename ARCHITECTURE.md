@@ -33,14 +33,16 @@ Luồng xử lý từ input case đến output và trace audit:
 
 ## 2. Agent ownership
 
+Danh sách 10 tool MCP thật (verify bằng `day09 mcp-tools` + `input_schema` của từng tool, 2026-09-25): `get_order`, `get_order_items`, `get_sellers`, `get_product_context`, `get_shipment_summary`, `get_order_payments`, `get_payment_timeline`, `get_refund_timeline`, `get_policy`, `get_customer_history`. Mọi tool nhận `case_id`; tham số riêng là `order_id` (hầu hết), `policy_version` (`get_policy`), `customer_unique_id` (`get_customer_history`, chưa dùng).
+
 | Actor | Input | Trách nhiệm | Output / Handoff | Allowed Tools |
 | --- | --- | --- | --- | --- |
-| `coordinator` | `case` | Khởi tạo `EvidenceStore`, phân quyền tool, chia việc song song, tổng hợp findings, điều phối A2A | Handoff sang `policy-agent` và `verifier` | Không gọi tool trực tiếp |
-| `order-agent` | `case`, `EvidenceStore` | Điều tra đơn hàng, mặt hàng, người bán (`order_ids`, `item_ids`, `seller_ids`), rule `canceled_order_paid`, `unavailable_order_paid` | `SpecialistResult` $\to$ `coordinator` | `get_order`, `get_order_items`, `get_seller`, `get_product` |
-| `shipment-agent` | `case`, `EvidenceStore` | Điều tra lịch trình vận chuyển (`shipment_ids`), hạn giao hàng `shipping_limit_date`, rule `late_delivery_seller`, `late_delivery_logistics` | `SpecialistResult` $\to$ `coordinator` | `get_shipment`, `get_delivery_timeline` |
-| `payment-agent` | `case`, `EvidenceStore` | Đối soát thanh toán, hoàn tiền (`payment_references`, `paid_total_brl`, `refunded_total_brl`), rule `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed` | `SpecialistResult` $\to$ `coordinator` | `get_payment`, `get_refund`, `get_payment_transactions` |
-| `policy-agent` | `case`, findings tổng hợp | Đối chiếu điều khoản hoàn tiền, xác định `case_status` và bộ `resolution_actions` không trùng lặp | `SpecialistResult` $\to$ `coordinator`, emit `policy_decided` | `get_policy`, `check_policy` |
-| `verifier` | Candidate output, `EvidenceStore` | Kiểm định 8 invariants, auto-repair không sai lệch, safe downgrade nếu phát hiện lỗi cấu trúc | `final_output` đúng JSON schema, emit `verification_completed` | Không gọi tool |
+| `coordinator` | `case` | Khởi tạo `EvidenceStore`, đăng ký quyền tool cho từng actor, chia việc song song, tổng hợp findings thành `primary_issue`/`case_status`/`resolution_actions` (bảng cố định `_ACTION_MAP` trong `workflow.py`), quyết định `unsupported_claim` khi mọi claim bị evidence phủ định | Handoff sang `policy-agent` (chỉ để lấy policy) và `verifier` | Không gọi tool trực tiếp |
+| `order-agent` | `case`, `EvidenceStore` | Điều tra đơn hàng/mặt hàng/người bán (`order_ids`, `item_ids`, `seller_ids`), rule `canceled_order_paid`, `unavailable_order_paid` theo `order_status`; `apply_payment_totals()` cộng thêm refund line từ số liệu payment-agent | `SpecialistResult` → `coordinator` | `get_order`, `get_order_items`, `get_sellers` |
+| `shipment-agent` | `case`, `EvidenceStore` | So sánh `delivered_carrier_at` với `shipping_limit_at` (chọn dòng hợp lý khi có nhiều bản ghi mâu thuẫn) và `delivered_customer_at` với `estimated_delivery_at`; rule `late_delivery_seller`, `late_delivery_logistics`; hoàn `freight_value` của item trễ | `SpecialistResult` → `coordinator` | `get_shipment_summary`, `get_order_items`, `get_order` |
+| `payment-agent` | `case`, `EvidenceStore` | Đối soát thanh toán/hoàn tiền (`payment_references`, `paid_total_brl`, `refunded_total_brl` cho order-agent dùng); rule `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed` — **chỉ xét đúng topic khách hàng claim**, topic khác không được suy diễn từ dữ liệu nền không liên quan | `SpecialistResult` → `coordinator` | `get_order_payments`, `get_payment_timeline`, `get_refund_timeline`, `get_order_items` |
+| `policy-agent` | `case` | **Chỉ fetch** `get_policy(policy_version)`, trả về `findings["policy_raw"]`. Không tự đoán `case_status`/`resolution_actions` từ raw claim topic (vì đó chưa phải kết luận đã verify) — coordinator mới là nơi quyết định, dựa trên `primary_issue` đã được specialist xác nhận bằng evidence | `SpecialistResult` → `coordinator`; coordinator emit `policy_decided` với actor=`policy-agent` | `get_policy` |
+| `verifier` | Candidate output, `EvidenceStore` | Kiểm định invariants, auto-repair không sai lệch, safe downgrade nếu phát hiện lỗi cấu trúc, tái tính `confidence` qua `calibration.calculate_confidence` | `final_output` đúng JSON schema, emit `verification_completed` | Không gọi tool |
 
 ## 3. A2A protocol
 
@@ -69,11 +71,16 @@ Giao thức trao đổi tin cậy giữa các agent:
 
 | Failure | Retry? | Fallback | Trace event / code |
 | --- | --- | --- | --- |
-| MCP timeout / mạng chập chờn | Có (tối đa 2 lần, exponential backoff) | Bỏ qua domain đó, ghi nhận lỗi vào `errors`, tiếp tục case | `attributes.violations_count` |
-| Not found / Resource missing | Không retry (fail-fast) | Đánh dấu thiếu dữ liệu, chuyển sang `insufficient_evidence` | `decision_code="NOT_FOUND"` |
+| MCP timeout / mạng chập chờn | Có (tối đa 2 lần, exponential backoff trong `EvidenceStore.fetch`) | Bỏ qua domain đó, ghi nhận lỗi vào `errors`, tiếp tục case | `attributes.violations_count` |
+| Not found / tool báo lỗi vì domain không có dữ liệu (vd. `get_refund_timeline` báo lỗi khi order chưa từng có refund — quan sát thật) | Không retry (fail-fast) | Bọc riêng lệnh gọi đó trong try/except, coi là "không có dữ liệu" (list/dict rỗng), **không** để lỗi này làm mất các finding đã tính trước đó (vd. `paid_total_brl`) | `errors` của `SpecialistResult` ghi rõ tool + lỗi |
+| Tool ngoài quyền của actor | Không retry | `EvidenceStore.check_permission` fail-closed: actor chưa đăng ký (`register_actor_tools`) coi như không có quyền gì, raise `PermissionError` ngay | Exception bị specialist's `run()` bắt, ghi vào `errors` |
 | Source conflict (Message vs MCP) | Không retry | Luôn ưu tiên dữ liệu từ MCP authoritative, ghi nhận vào `data_conflicts` | `decision_code="SOURCE_CONFLICT"` |
 | Specialist runtime exception | Không retry | Specialist trả về `SpecialistResult` rỗng có `errors`, không làm sập luồng chung | `actor_completed` kèm payload errors |
 | Verifier invariant check failure | Không retry | Tự động vá an toàn (auto-repair); nếu lỗi schema cấu trúc thì hạ cấp (safe downgrade) | `verification_completed` (`REPAIRED` / `DOWNGRADED`) |
+
+**Bài học thật gặp phải khi tích hợp MCP:**
+- `mcp_gateway.py` gọi `result.isError`, nhưng bản `mcp>=2,<3` cài về (`2.2.0`) trả field `is_error` — đã vá tương thích ngược (đọc cả hai tên, giữ style fallback có sẵn của `structuredContent`/`structured_content`).
+- Bug nghiêm trọng nhất phát hiện sau khi chạy full 100 case lần đầu: `payment-agent` kiểm tra `refund_failed`/`refund_pending`/`duplicate_charge` **không điều kiện** theo bất kỳ payment topic nào được claim, khiến một case chỉ claim `valid_split_payment` nhưng có sẵn 1 event refund "failed" không liên quan trong dữ liệu nền bị nhận nhầm thành `refund_failed`. Sau khi sửa để mỗi rule chỉ xét đúng topic được claim, `valid_split_payment`/`payment_mismatch`/`unsupported_claim` mới xuất hiện đúng trong kết quả.
 
 ## 6. Verification invariants
 

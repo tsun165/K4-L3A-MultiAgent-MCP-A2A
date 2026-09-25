@@ -1,21 +1,27 @@
 # MCP tools — ghi chú cho Order / Shipment agent
 
-> ## ⚠️ Trạng thái verify (Claude Code ghi lại, xem STANDARDS.md §4)
+> ## ✅ Trạng thái verify (cập nhật 2026-09-25, sau khi sửa `.env`)
 >
-> - **§1 Danh sách tool + tham số: ĐÃ VERIFY độc lập.** Claude Code tự chạy `day09 mcp-tools`
->   và đọc `input_schema` của từng tool qua `ClientSession.list_tools()` — khớp 100% với
->   bảng dưới đây (10 tool, tham số `case_id` + `order_id`/`policy_version`/`customer_unique_id`).
-> - **§2–§7 (field bên trong `data`, kết quả chạy thử thật): CHƯA VERIFY được.** Từ lúc có
->   `.env`, Claude Code gọi `get_order`/`get_policy` nhiều lần (>15 phút, nhiều case khác
->   nhau, kể cả đúng `order_id` mà mục "Kết quả chạy thử thật" bên dưới nói đã thành công) —
->   **100% lỗi `Error executing tool <name>`**. Không tái hiện được bất kỳ lần gọi thành công
->   nào. Team khác trên leaderboard đang có `evidence coverage` > 90% cùng thời điểm, nên đây
->   nhiều khả năng là vấn đề riêng của key/team này, không phải lỗi hệ thống chung.
-> - **Không dùng field/kết quả bên dưới làm căn cứ chấm điểm hay quyết định cuối** cho tới khi
->   có một lần gọi thành công thật, dán JSON thô (không diễn giải) đối chiếu lại.
+> - **Nguyên nhân lỗi `Error executing tool` kéo dài trước đó: `.env` chứa key sai 1 ký tự**
+>   (`0285` số 0 thay vì `O285` chữ O, do đọc nhầm từ ảnh chụp màn hình). Trang workspace xác
+>   nhận `"detail":"Team access token không hợp lệ."` cho key sai; sau khi user gửi lại key
+>   đúng bằng text, mọi tool gọi được bình thường. **Không phải lỗi hệ thống, không phải bug
+>   code** — bài học: luôn lấy secret bằng copy-paste text, không OCR từ ảnh.
+> - **Toàn bộ §1–§3 bên dưới đã đối chiếu với response JSON thật** (không còn là suy đoán).
+>   Field trong §2/§3 khớp gần như tuyệt đối với nội dung đã ghi trước đó (kể cả 2 dòng
+>   `shipping_limit_date` mâu thuẫn của case 001) — chứng tỏ lần soạn đầu tiên **là** dữ liệu
+>   thật, chỉ là không tái hiện lại được do key sai vào đúng lúc verify.
 > - Bug `mcp_gateway.py` dùng `result.isError` (SDK thật dùng `is_error`) đã được vá trên
->   `main` — không phải nguyên nhân của lỗi `Error executing tool` ở trên (đó là lỗi server
->   trả về, không phải crash phía client).
+>   `main` (không liên quan tới lỗi key ở trên, nhưng cũng là một lỗi thật cần vá).
+> - **Phát hiện thêm sau khi có dữ liệu thật** (xem `ARCHITECTURE.md` §5):
+>   1. `get_refund_timeline` trả về **một object `{order_id, events: [...]}`**, không phải
+>      list các refund như bản nháp ban đầu giả định (`refund_status`/`refund_amount`/
+>      `refund_id` **không tồn tại**; field thật là `events[].status` và `events[].amount_brl`).
+>      Tool này còn báo lỗi thẳng khi order chưa từng có refund (không trả `{events: []}`).
+>   2. `payment-agent` từng kiểm tra refund_failed/pending không điều kiện theo topic được
+>      claim, khiến 1 case chỉ claim `valid_split_payment` (case 005) bị nhận nhầm thành
+>      `refund_failed` vì có sẵn 1 event refund "failed" không liên quan trong dữ liệu nền.
+>      Đã sửa: mỗi rule chỉ xét khi đúng topic đó được claim.
 
 Nguồn: `list_tools` + gọi thử trên `L3A_CASE_001` (canceled_order_paid) và `L3A_CASE_003` (late_delivery_seller), policy `EC_POLICY_V1`.
 
@@ -145,6 +151,27 @@ Mỗi response được dùng → `tool_result_consumed`, `actor="order-agent"`/
 | 003 | late_delivery_seller | `late_delivery_seller`, freight 18 |
 | 004 | late_delivery_logistics | `late_delivery_logistics`, freight 18 (sau khi sửa rule chọn limit) |
 
-## 7. Còn mở
+## 7. Payment / Policy — field thật (verify 2026-09-25)
+
+### `get_order_payments` → `data` là list
+`order_id`, `payment_sequential`, `payment_type` (`credit_card`/`voucher`), `payment_installments`, `payment_value`. **Số ở dạng string** (`"79.00"`), `payment_sequential`/`payment_installments` cũng là string (`"1"`).
+
+Ví dụ case duplicate_charge (007): 4 dòng, 2 cặp `(credit_card, 64.00, seq1)` và `(voucher, 64.00, seq2)` mỗi cặp lặp lại đúng 2 lần → nhận diện trùng bằng key `(payment_type, amount, installments)`, dòng lặp thứ 2 là bản trùng.
+
+### `get_refund_timeline` → `data` là **OBJECT**, không phải list
+```json
+{"order_id": "...", "events": [
+  {"order_id": "...", "event_at": "...", "event_type": "refund_requested", "amount_brl": "89.00", "status": "pending"}
+]}
+```
+- `status` quan sát được: `pending`, `failed` (chưa thấy `completed` trong mẫu đã gọi).
+- **Không có `refund_id`.** Dùng `order_id` làm `entity_id` của refund line.
+- **Tool báo lỗi thẳng** (`Error executing tool get_refund_timeline`) khi order chưa từng có refund nào — không trả `{"events": []}`. Phải bọc try/except riêng, coi lỗi này là "không có refund", không phải crash.
+- ⚠️ **Order có thể có event refund không liên quan tới topic đang claim** (case 005 chỉ claim `valid_split_payment` nhưng vẫn có 1 event `status=failed`). Payment-agent chỉ được kết luận `refund_failed`/`refund_pending` khi **đúng topic đó được claim**, không được suy diễn từ event có sẵn bất kể topic.
+
+### `get_policy` → `data.rules[<primary_issue>]`
+Trả về **toàn bộ 10 rule** (không phải riêng theo case), mỗi rule có `case_status`, `recommended_action`, `refund_brl` (giá trị **ví dụ**, không phải số của case đang xét), `responsible_parties`. Dùng để tham khảo action/case_status mặc định, KHÔNG dùng `refund_brl` mẫu này làm số tiền thật.
+
+## 8. Còn mở
 - Theo STANDARDS: tên tool chỉ lấy từ `agents/tools.py`, mã chuẩn lấy từ `agents/vocab.py`. Specialist không đề xuất `unsupported_claim` mà ghi `findings["claim_check"][topic]` = `CLAIM_SUPPORTED`/`CLAIM_CONTRADICTED` để coordinator đọc.
-- Refund của canceled/unavailable cần `payment_res.findings["paid_total_brl"/"refunded_total_brl"]`. Payment agent trên nhánh của Khoa vẫn là skeleton, còn bản của Đạt (nhánh `hoangthaidat`) dùng interface `SpecialistResult` khác.
+- `total_refunded_brl` (order-agent dùng để trừ vào refund canceled/unavailable) chỉ cộng event có `status == "completed"` — **chưa từng quan sát được giá trị này thật**, cần theo dõi ở lần chạy full tiếp theo xem có case nào order đã được hoàn đủ chưa mà vẫn bị đề xuất refund thêm không.
