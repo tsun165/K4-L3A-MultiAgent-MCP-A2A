@@ -13,17 +13,20 @@ Agent phải:
 
 Customer message không phải ground truth. Không được tự đoán dữ liệu hoặc tạo `evidence_ref` giả.
 
-## Thành viên nhóm
+## 👥 Thành viên & phân công
 
-| Thành viên | GitHub | Vai trò chính |
-| --- | --- | --- |
-| Đỗ Khắc Gia Khoa | `Dokhacgiakhoa` | Trưởng nhóm — điều phối Antigravity + Claude Code, merge PR, chạy full run và nộp bài |
-| Đỗ Thái Sơn | `tsun165` | Review PR + test/backtest phần order/item/seller và shipment |
-| Hoàng Thái Đạt | `Liber72` | Review PR + test/backtest phần payment/refund, policy và verifier |
+**Nhóm:** `1nguoi1mang` · Danh sách đầy đủ + phần tự khai đóng góp: [TEAM.md](TEAM.md).
+
+| STT | Họ và tên | MSSV | GitHub | Vai trò & phạm vi (file chính) | Issue | Trạng thái |
+| ---: | --- | --- | --- | --- | --- | :---: |
+| 1 | Đỗ Khắc Gia Khoa | 02733 | [@Dokhacgiakhoa](https://github.com/Dokhacgiakhoa) | Trưởng nhóm & Integrator — interface (`agents/base.py`), coordinator (`workflow.py`), tool registry (`agents/tools.py`), mã chuẩn (`agents/vocab.py`), chạy full run và nộp bài | [#1](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/1) | ✅ |
+| 2 | Đỗ Thái Sơn | 03021 | [@tsun165](https://github.com/tsun165) | Order/Item/Seller & Shipment agent (`agents/order_agent.py`, `agents/shipment_agent.py`) | [#2](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/2) | ✅ |
+| 3 | Hoàng Thái Đạt | 02959 | [@Liber72](https://github.com/Liber72) | Payment/Refund & Policy agent (`agents/payment_agent.py`, `agents/policy_agent.py`) | [#3](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/3) | ✅ |
+| 4 | Nguyễn Nguyên Phong | 02691 | [@Heargreaves1](https://github.com/Heargreaves1) | Verifier & Calibration — kiểm định invariant, tính `confidence`, bộ test (`agents/verifier.py`, `calibration.py`, `tests/`) | [#8](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/8) | ✅ |
 
 Kế hoạch chi tiết và phân công: [PLAN.md](PLAN.md). **Chuẩn code bắt buộc: [STANDARDS.md](STANDARDS.md).**
 
-Code do hai AI agent viết: **Antigravity** (core: interface, coordinator, verifier) và **Claude Code** (tool registry + 4 specialist agent). Sơn và Đạt review + test.
+Code do 2 AI agent viết dưới sự điều phối của cả nhóm: **Antigravity** (khung ban đầu) và **Claude Code** (specialist agent, verifier, calibration, fix bug với dữ liệu MCP thật). Cả 4 thành viên review, test và xác nhận kết quả trước khi nộp.
 
 ## Dữ liệu
 

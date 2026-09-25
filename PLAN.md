@@ -31,19 +31,20 @@
 
 > **Chuẩn code bắt buộc: [STANDARDS.md](STANDARDS.md)** (ưu tiên hơn file này khi mâu thuẫn).
 >
-> **Antigravity viết core** (interface, coordinator, verifier, calibration); **Claude Code viết tool registry + 4 specialist agent**. Sơn và Đạt **review PR + viết/chạy test + backtest output**, không tự code logic. Khoa điều phối Antigravity, merge PR, chạy full run và nộp bài.
+> Nhóm 4 người (đầy đủ tại [TEAM.md](TEAM.md)). **Claude Code viết toàn bộ code** (interface, coordinator, verifier, calibration, tool registry, 4 specialist agent). Sơn, Đạt, Phong **review PR + viết/chạy test + backtest output**, không tự code logic. Khoa điều phối, merge, chạy full run và nộp bài.
 
 | Người | GitHub | Vai trò | Phạm vi review / test |
 | --- | --- | --- | --- |
-| **Khoa** (trưởng nhóm) | `Dokhacgiakhoa` | Giao việc cho Antigravity theo `prompts/antigravity-khoa.md`, merge PR, full run, đóng gói, nộp | Toàn bộ; quyết định cuối khi có tranh luận |
-| **Sơn** | `tsun165` | Reviewer + tester | `order-agent`, `shipment-agent`: `canceled_order_paid`, `unavailable_order_paid`, `late_delivery_seller`, `late_delivery_logistics`, `affected_entities`, trace/workflow |
-| **Đạt** | `Liber72` | Reviewer + tester | `payment-agent`, `policy-agent`, verifier: `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed`, `financial_resolution`, consistency |
+| **Khoa** (trưởng nhóm) | `Dokhacgiakhoa` | Điều phối AI, merge PR, full run, đóng gói, nộp | Toàn bộ; quyết định cuối khi có tranh luận |
+| **Sơn** | `tsun165` | Reviewer + tester | `order-agent`, `shipment-agent`: `canceled_order_paid`, `unavailable_order_paid`, `late_delivery_seller`, `late_delivery_logistics`, `affected_entities` |
+| **Đạt** | `Liber72` | Reviewer + tester | `payment-agent`, `policy-agent`: `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed`, `financial_resolution` |
+| **Phong** | `Heargreaves1` | Reviewer + tester | `agents/verifier.py`, `calibration.py`, trace/workflow, consistency, `tests/` |
 
 **Cách làm việc:**
 
-- Antigravity làm trên `feat/core-khoa`, mở PR theo nhóm (core, order/shipment, payment/policy). Sơn/Đạt review PR đúng phạm vi của mình, góp ý bằng comment trên PR; Khoa chuyển góp ý cho Antigravity.
-- **Backtest:** sau mỗi lần Khoa full run, Sơn và Đạt đọc `outputs/*.json` + `traces/trace.jsonl` (Khoa chia sẻ, không commit), mỗi người soát ~10 case thuộc issue mình phụ trách: `primary_issue` có hợp lý so với evidence không, tiền có khớp không, ref có đúng case không. Ghi case sai + lý do vào issue.
-- Chỉ Khoa chạy `day09 run` trên toàn bộ 100 case và nộp bài (mọi MCP call bị audit). Sơn/Đạt chỉ chạy `pytest` và test offline.
+- Claude Code làm trên `main` (trực tiếp hoặc qua PR), mở PR theo nhóm domain (core, order/shipment, payment/policy, verifier/calibration). Sơn/Đạt/Phong review PR đúng phạm vi của mình, góp ý bằng comment trên PR.
+- **Backtest:** sau mỗi lần Khoa full run, mỗi người đọc `outputs/*.json` + `traces/trace.jsonl` (Khoa chia sẻ, không commit) trong phạm vi mình phụ trách: `primary_issue` có hợp lý so với evidence không, tiền có khớp không, ref có đúng case không. Ghi case sai + lý do vào issue.
+- Chỉ Khoa chạy `day09 run` trên toàn bộ 100 case và nộp bài (mọi MCP call bị audit). Các thành viên còn lại chỉ chạy `pytest` và test offline.
 - Không commit `.env`, input (`l3a-inputs-*/`, `inputs/*.json`), output, trace.
 
 ---

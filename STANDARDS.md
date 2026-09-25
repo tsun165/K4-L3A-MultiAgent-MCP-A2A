@@ -12,21 +12,25 @@
 | **Khoa** (`Dokhacgiakhoa`) | Điều phối, giữ `.env`, chạy full run, nộp bài | Mọi thứ |
 | **Claude Code** (AI, dưới tài khoản Khoa) | Viết **toàn bộ** code: interface, coordinator, verifier, calibration, tool registry, 4 specialist agent, mã chuẩn, test | Xem §2 |
 | **Antigravity** (AI, dưới tài khoản Khoa) | Đã dừng ở Task 1 (interface + skeleton, PR #4). Từ đây Claude Code tiếp quản toàn bộ, kể cả phần core. | — |
-| **Sơn** (`tsun165`) | Review + test/backtest: order, shipment, trace/workflow | Chỉ file test, comment PR |
-| **Đạt** (`Liber72`) | Review + test/backtest: payment, policy, verifier, tiền | Chỉ file test, comment PR |
+| **Sơn** (`tsun165`) | Phụ trách order/shipment agent; review + test/backtest | Chỉ file test, comment PR |
+| **Đạt** (`Liber72`) | Phụ trách payment/policy agent; review + test/backtest | Chỉ file test, comment PR |
+| **Phong** (`Heargreaves1`) | Phụ trách verifier/calibration; review + test/backtest | Chỉ file test, comment PR |
 
-Sơn và Đạt **không** push code logic. Branch `hoangthaidat` không được merge. Nếu có ý tưởng hay trong đó, chuyển thành comment trên PR.
+Sơn, Đạt và Phong **không** push code logic ngoài phạm vi test của mình. Branch `hoangthaidat` không được merge. Nếu có ý tưởng hay trong đó, chuyển thành comment trên PR.
+
+Xem phân công đầy đủ + trạng thái từng người tại [TEAM.md](TEAM.md).
 
 ## 2. Quyền sở hữu file (tránh conflict)
 
 | File | Owner | Ghi chú |
 | --- | --- | --- |
 | `agents/base.py`, `agents/__init__.py` | Claude Code | Interface ở §5: **đóng băng**, đổi phải báo trước |
-| `workflow.py`, `agents/verifier.py`, `calibration.py` | Claude Code | |
+| `workflow.py` | Claude Code | |
 | `ARCHITECTURE.md` | Claude Code | Cập nhật sau khi specialist xong |
 | `agents/tools.py` | Claude Code | **Tool registry**, xem §4 |
 | `agents/order_agent.py`, `agents/shipment_agent.py` | Claude Code | Reviewer: Sơn |
 | `agents/payment_agent.py`, `agents/policy_agent.py` | Claude Code | Reviewer: Đạt |
+| `agents/verifier.py`, `calibration.py`, `tests/` | Claude Code | Reviewer: Phong |
 | `agents/vocab.py` | Claude Code | Mã chuẩn ở §7 |
 | `notes/mcp-tools.md` | Người chạy `day09 mcp-tools` | Không chứa key |
 | `tests/test_<module>.py` | Người viết module; Sơn/Đạt được thêm test | |
