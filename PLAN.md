@@ -33,10 +33,29 @@ Việc chung cả nhóm: `unsupported_claim` / `insufficient_evidence`, `claim_a
 **Cách làm việc:**
 
 - Mỗi người làm trên branch riêng (`feat/core-khoa`, `feat/order-shipment-son`, `feat/payment-policy-dat`), merge vào `main` qua PR, ít nhất 1 người khác review.
-- Khoa chốt **interface** (`AgentMessage`, `EvidenceStore`, kiểu kết quả specialist trả về) trong ngày 1. Sơn và Đạt code theo interface đó, không cần chờ coordinator xong.
+- Khoa chốt **interface** (`AgentMessage`, `EvidenceStore`, kiểu kết quả specialist trả về) trước **phút 30**. Sơn và Đạt code theo interface đó, không cần chờ coordinator xong.
 - Mỗi specialist trả về `SpecialistResult` gồm: `findings` (các tín hiệu đã chuẩn hoá), `candidate_issues`, `evidence_refs` đã dùng. Coordinator và verifier (Khoa) tổng hợp thành output.
 - Chỉ Khoa chạy `day09 run` trên toàn bộ 100 case và nộp bài, để trace/audit không bị lẫn giữa nhiều lần chạy. Sơn và Đạt thử trên vài case.
 - Mỗi người tự quản lý `.env` của mình, không commit key.
+
+---
+
+## ⏱️ Timeline 120 phút
+
+Lab chỉ có **120 phút** → ưu tiên có bài nộp hợp lệ sớm (khoảng phút 85), rồi mới tinh chỉnh. Các mục đánh dấu *(bỏ nếu thiếu giờ)* là không bắt buộc.
+
+| Phút | Khoa (Antigravity) | Sơn | Đạt | Mốc |
+| --- | --- | --- | --- | --- |
+| 0–15 | Setup, đăng ký team, tải input, `day09 mcp-tools`, chia sẻ `.env` + tool list | Setup, gọi thử tool order/item/seller/shipment trên 2 case | Setup, gọi thử tool payment/refund/policy trên 2 case | Cả nhóm chạy được `day09 mcp-tools` |
+| 15–30 | Task 1: `agents/base.py` + skeleton 4 agent → merge `main` | Ghi field quan trọng vào `notes/mcp-tools.md`, viết nháp rule | Như Sơn, phần payment/refund/policy | **M1 (30'):** interface trên `main` |
+| 30–70 | Task 2 coordinator + Task 3 verifier | Code `order_agent.py` + `shipment_agent.py` | Code `payment_agent.py` + `policy_agent.py` | Mỗi người PR trước phút 70 |
+| 70–85 | Merge PR, chạy thử 3 case, sửa lỗi tích hợp | Hỗ trợ fix lỗi agent mình | Hỗ trợ fix lỗi agent mình | **M2 (85'):** full run + `validate` + **nộp lần 1** |
+| 85–110 | Task 4 confidence + đọc breakdown điểm | Tinh chỉnh rule theo điểm `semantic`/`evidence` | Tinh chỉnh rule theo điểm `semantic`/`evidence` | **Nộp lần 2** trước phút 110 |
+| 110–120 | Task 5 `ARCHITECTURE.md`, nộp bản cuối | Điền phần order/shipment trong `ARCHITECTURE.md` | Điền phần payment/policy trong `ARCHITECTURE.md` | **M3 (120'):** chọn final submission |
+
+Bỏ nếu thiếu giờ: unit test đầy đủ (chỉ giữ smoke test), chạy song song nhiều case, `claim_assessments` chi tiết.
+
+> Các giai đoạn bên dưới là danh sách việc chi tiết; thời gian thực hiện theo bảng timeline này.
 
 ---
 
@@ -61,7 +80,7 @@ Việc chung cả nhóm: `unsupported_claim` / `insufficient_evidence`, `claim_a
 
 ## 2. Các giai đoạn
 
-### Giai đoạn 1 — Setup & khám phá (ngày 1) — cả nhóm
+### Giai đoạn 1 — Setup & khám phá (phút 0–30) — cả nhóm
 
 - [ ] **Cả 3:** tạo venv Python 3.11, `pip install -e ".[dev]"`, `pytest -q` pass.
 - [ ] **Khoa:** đăng ký team trên `/register`, chia sẻ `sk-team-...` cho nhóm qua kênh riêng (không commit, không dán vào issue/PR).
@@ -76,7 +95,7 @@ Việc chung cả nhóm: `unsupported_claim` / `insufficient_evidence`, `claim_a
 
 **Deliverable:** `notes/mcp-tools.md` + cả nhóm hiểu rõ input format.
 
-### Giai đoạn 2 — Khung multi-agent + trace (ngày 1–2) — Khoa chính
+### Giai đoạn 2 — Khung multi-agent + trace (phút 15–70) — Khoa chính
 
 Cấu trúc code đề xuất (tách file trong `src/student_agent/`):
 
@@ -109,7 +128,7 @@ rules.py           # bảng quyết định primary_issue / cause / responsible
 
 **Deliverable:** `day09 run` chạy hết 100 case với output tối thiểu pass schema (`primary_issue=insufficient_evidence`, confidence thấp) nhưng dùng evidence thật; `day09 validate` pass.
 
-### Giai đoạn 3 — Logic nghiệp vụ (ngày 2–4) — trọng tâm 45%, Sơn + Đạt chính
+### Giai đoạn 3 — Logic nghiệp vụ (phút 30–70, tinh chỉnh 85–110) — trọng tâm 45%, Sơn + Đạt chính
 
 Xây bảng quyết định cho 11 giá trị `primary_issue`:
 
@@ -142,7 +161,7 @@ Các việc cụ thể:
 - [ ] **Đạt:** policy agent đọc policy từ MCP (nếu có tool policy) để quyết định cửa sổ refund / trách nhiệm.
 - [ ] **Khoa:** `evidence_refs` top-level: chỉ những ref **thực sự hỗ trợ kết luận** (precision quan trọng — đừng dump mọi ref đã gọi).
 
-### Giai đoạn 4 — Verifier & calibration (ngày 4) — Khoa chính
+### Giai đoạn 4 — Verifier & calibration (phút 30–110) — Khoa chính
 
 Verifier kiểm trước khi trả output:
 
@@ -158,7 +177,7 @@ Calibration:
 
 - [ ] Confidence theo độ chắc của rule: ví dụ ~0.9 khi tín hiệu rõ + đủ evidence, ~0.6 khi có conflict, ~0.3 khi thiếu dữ liệu. Điều chỉnh sau khi xem điểm public.
 
-### Giai đoạn 5 — Failure policy & độ bền (ngày 4–5) — Khoa chính, Sơn/Đạt xử lý lỗi trong agent của mình
+### Giai đoạn 5 — Failure policy & độ bền (phút 70–110) — Khoa chính, Sơn/Đạt xử lý lỗi trong agent của mình
 
 | Failure | Retry? | Fallback | Trace |
 | --- | --- | --- | --- |
@@ -170,7 +189,7 @@ Calibration:
 - [ ] Một case lỗi không được làm sập cả run (bắt exception trong `solve_case`, vẫn trả output hợp lệ từ evidence đã có).
 - [ ] Cân nhắc chạy song song có giới hạn (semaphore 4–8) nếu 100 case chạy chậm — lưu ý CLI hiện chạy tuần tự.
 
-### Giai đoạn 6 — Test, tài liệu, nộp bài (ngày 5)
+### Giai đoạn 6 — Test, tài liệu, nộp bài (phút 70–120)
 
 - [ ] **Sơn:** unit test cho rule order/shipment với fixture data giả (chỉ để test logic, **không** dùng làm output).
 - [ ] **Đạt:** unit test cho rule payment/refund/policy + tính tiền.
