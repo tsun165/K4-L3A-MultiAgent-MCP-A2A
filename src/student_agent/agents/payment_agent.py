@@ -30,6 +30,25 @@ def _dec(value: Any) -> Decimal:
         return Decimal("0.00")
 
 
+def _reconcile_payments(payments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop conflicting-amount noise rows sharing a payment_sequential.
+
+    Verified live: a payment_sequential can appear twice with a DIFFERENT amount
+    (mirrors the order_item_id/shipping_limit_date duplicate-row noise on items).
+    An EXACT repeat (same sequential AND amount) is left untouched -- that is
+    genuine duplicate-charge evidence for _detect_duplicate() to catch on the raw
+    list, not conflicting-slot noise to reconcile away.
+    """
+    by_seq: dict[Any, list[dict[str, Any]]] = {}
+    for p in payments:
+        by_seq.setdefault(p.get("payment_sequential"), []).append(p)
+    reconciled: list[dict[str, Any]] = []
+    for rows in by_seq.values():
+        distinct_values = {str(_dec(r.get("payment_value"))) for r in rows}
+        reconciled.extend(rows if len(distinct_values) <= 1 else rows[:1])
+    return reconciled
+
+
 class PaymentAgent:
     """Specialist Agent for Payment and Refund domain.
 
@@ -87,7 +106,16 @@ class PaymentAgent:
             pay_refs.append(f"{order_id}_pay_{seq}")
         result.entities["payment_references"] = pay_refs
 
-        total_paid = sum((_dec(p.get("payment_value")) for p in payments), Decimal("0.00"))
+        # Reconciled (not raw) payments feed every total: live data showed an extra row
+        # sharing payment_sequential with an earlier row but a DIFFERENT amount (same
+        # duplicate-row-noise pattern as order_item_id/shipping_limit_date on items) --
+        # summing the raw list double-counts that slot. An EXACT repeat (same sequential
+        # AND amount) is left alone here; that is genuine duplicate-charge evidence,
+        # handled by _detect_duplicate() on the raw `payments` list below.
+        reconciled_payments = _reconcile_payments(payments)
+        total_paid = sum(
+            (_dec(p.get("payment_value")) for p in reconciled_payments), Decimal("0.00")
+        )
 
         # get_refund_timeline returns a single {order_id, events:[...]} object, and errors
         # outright when an order has no refund history at all (observed live) -- treat that
@@ -177,8 +205,16 @@ class PaymentAgent:
         if "payment_mismatch" in claimed_topics or "valid_split_payment" in claimed_topics:
             items_rec = await store.fetch(self.name, GET_ORDER_ITEMS, order_id=order_id)
             items = items_rec.data if isinstance(items_rec.data, list) else []
+            # Same duplicate-row noise as shipping_limit_date (STANDARDS/notes §3): an
+            # order_item_id can appear twice; count it once or the expected total doubles.
+            unique_items: dict[Any, dict[str, Any]] = {}
+            for i in items:
+                unique_items.setdefault(i.get("order_item_id"), i)
             expected_total = sum(
-                (_dec(i.get("price")) + _dec(i.get("freight_value")) for i in items),
+                (
+                    _dec(i.get("price")) + _dec(i.get("freight_value"))
+                    for i in unique_items.values()
+                ),
                 Decimal("0.00"),
             )
             if items:
@@ -206,7 +242,7 @@ class PaymentAgent:
             contradicted["payment_mismatch"] = vocab.CLAIM_CONTRADICTED
 
         if "valid_split_payment" in claimed_topics:
-            is_split = len(payments) > 1 and diff == 0
+            is_split = len(reconciled_payments) > 1 and diff == 0
             if is_split:
                 self._set_claim_check(result, claimed_topics, "valid_split_payment")
                 result.candidate_issues.append(("valid_split_payment", 0.9))
