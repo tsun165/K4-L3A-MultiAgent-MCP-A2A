@@ -1,5 +1,22 @@
 # MCP tools — ghi chú cho Order / Shipment agent
 
+> ## ⚠️ Trạng thái verify (Claude Code ghi lại, xem STANDARDS.md §4)
+>
+> - **§1 Danh sách tool + tham số: ĐÃ VERIFY độc lập.** Claude Code tự chạy `day09 mcp-tools`
+>   và đọc `input_schema` của từng tool qua `ClientSession.list_tools()` — khớp 100% với
+>   bảng dưới đây (10 tool, tham số `case_id` + `order_id`/`policy_version`/`customer_unique_id`).
+> - **§2–§7 (field bên trong `data`, kết quả chạy thử thật): CHƯA VERIFY được.** Từ lúc có
+>   `.env`, Claude Code gọi `get_order`/`get_policy` nhiều lần (>15 phút, nhiều case khác
+>   nhau, kể cả đúng `order_id` mà mục "Kết quả chạy thử thật" bên dưới nói đã thành công) —
+>   **100% lỗi `Error executing tool <name>`**. Không tái hiện được bất kỳ lần gọi thành công
+>   nào. Team khác trên leaderboard đang có `evidence coverage` > 90% cùng thời điểm, nên đây
+>   nhiều khả năng là vấn đề riêng của key/team này, không phải lỗi hệ thống chung.
+> - **Không dùng field/kết quả bên dưới làm căn cứ chấm điểm hay quyết định cuối** cho tới khi
+>   có một lần gọi thành công thật, dán JSON thô (không diễn giải) đối chiếu lại.
+> - Bug `mcp_gateway.py` dùng `result.isError` (SDK thật dùng `is_error`) đã được vá trên
+>   `main` — không phải nguyên nhân của lỗi `Error executing tool` ở trên (đó là lỗi server
+>   trả về, không phải crash phía client).
+
 Nguồn: `list_tools` + gọi thử trên `L3A_CASE_001` (canceled_order_paid) và `L3A_CASE_003` (late_delivery_seller), policy `EC_POLICY_V1`.
 
 ## 1. Danh sách tool

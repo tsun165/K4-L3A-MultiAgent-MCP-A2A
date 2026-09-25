@@ -50,8 +50,11 @@ class EvidenceStore:
         self._allowed_tools[actor] = set(tools)
 
     def check_permission(self, actor: str, tool_name: str) -> None:
-        """Verify if actor has authorization to invoke tool_name."""
-        if actor in self._allowed_tools and tool_name not in self._allowed_tools[actor]:
+        """Verify if actor has authorization to invoke tool_name.
+
+        Fail-closed: an actor that was never registered has no tools at all.
+        """
+        if tool_name not in self._allowed_tools.get(actor, frozenset()):
             raise PermissionError(
                 f"Actor '{actor}' is not authorized to call tool '{tool_name}'."
             )

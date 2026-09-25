@@ -16,8 +16,9 @@ GET_CUSTOMER_HISTORY = "get_customer_history"
 ORDER_TOOLS: frozenset[str] = frozenset({GET_ORDER, GET_ORDER_ITEMS, GET_SELLERS})
 # Shipment needs item freight (refund) and the purchase date (to discard noisy limit rows).
 SHIPMENT_TOOLS: frozenset[str] = frozenset({GET_SHIPMENT_SUMMARY, GET_ORDER_ITEMS, GET_ORDER})
+# Payment needs item price+freight (expected_total) to detect payment_mismatch.
 PAYMENT_TOOLS: frozenset[str] = frozenset(
-    {GET_ORDER_PAYMENTS, GET_PAYMENT_TIMELINE, GET_REFUND_TIMELINE}
+    {GET_ORDER_PAYMENTS, GET_PAYMENT_TIMELINE, GET_REFUND_TIMELINE, GET_ORDER_ITEMS}
 )
 POLICY_TOOLS: frozenset[str] = frozenset({GET_POLICY})
 
