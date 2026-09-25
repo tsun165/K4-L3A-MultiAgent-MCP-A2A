@@ -9,9 +9,9 @@
 
 | Ai | Vai trò | Được sửa |
 | --- | --- | --- |
-| **Khoa** (`Dokhacgiakhoa`) | Điều phối, merge PR, giữ `.env`, chạy full run, nộp bài | Mọi thứ |
-| **Antigravity** (AI, dưới tài khoản Khoa) | Code **core**: interface, coordinator, verifier, calibration, `ARCHITECTURE.md` | Xem §2 |
-| **Claude Code** (AI, dưới tài khoản Khoa) | Code **specialist**: tool registry, 4 agent, rule nghiệp vụ | Xem §2 |
+| **Khoa** (`Dokhacgiakhoa`) | Điều phối, giữ `.env`, chạy full run, nộp bài | Mọi thứ |
+| **Claude Code** (AI, dưới tài khoản Khoa) | Viết **toàn bộ** code: interface, coordinator, verifier, calibration, tool registry, 4 specialist agent, mã chuẩn, test | Xem §2 |
+| **Antigravity** (AI, dưới tài khoản Khoa) | Đã dừng ở Task 1 (interface + skeleton, PR #4). Từ đây Claude Code tiếp quản toàn bộ, kể cả phần core. | — |
 | **Sơn** (`tsun165`) | Review + test/backtest: order, shipment, trace/workflow | Chỉ file test, comment PR |
 | **Đạt** (`Liber72`) | Review + test/backtest: payment, policy, verifier, tiền | Chỉ file test, comment PR |
 
@@ -21,9 +21,9 @@ Sơn và Đạt **không** push code logic. Branch `hoangthaidat` không đượ
 
 | File | Owner | Ghi chú |
 | --- | --- | --- |
-| `agents/base.py`, `agents/__init__.py` | Antigravity | Interface ở §5: **đóng băng**, đổi phải báo trước |
-| `workflow.py`, `agents/verifier.py`, `calibration.py` | Antigravity | |
-| `ARCHITECTURE.md` | Antigravity | Cập nhật sau khi specialist xong |
+| `agents/base.py`, `agents/__init__.py` | Claude Code | Interface ở §5: **đóng băng**, đổi phải báo trước |
+| `workflow.py`, `agents/verifier.py`, `calibration.py` | Claude Code | |
+| `ARCHITECTURE.md` | Claude Code | Cập nhật sau khi specialist xong |
 | `agents/tools.py` | Claude Code | **Tool registry**, xem §4 |
 | `agents/order_agent.py`, `agents/shipment_agent.py` | Claude Code | Reviewer: Sơn |
 | `agents/payment_agent.py`, `agents/policy_agent.py` | Claude Code | Reviewer: Đạt |

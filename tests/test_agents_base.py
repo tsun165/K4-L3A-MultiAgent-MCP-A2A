@@ -72,9 +72,14 @@ async def test_evidence_store_isolation_between_cases(
     trace_writer: TraceWriter, contracts: Contracts
 ) -> None:
     gateway = FakeGateway()
+    allowed = {"order-agent": {"get_order"}}
 
-    store_a = EvidenceStore(case_id="CASE_A", gateway=gateway, trace=trace_writer)
-    store_b = EvidenceStore(case_id="CASE_B", gateway=gateway, trace=trace_writer)
+    store_a = EvidenceStore(
+        case_id="CASE_A", gateway=gateway, trace=trace_writer, allowed_tools_by_actor=allowed
+    )
+    store_b = EvidenceStore(
+        case_id="CASE_B", gateway=gateway, trace=trace_writer, allowed_tools_by_actor=allowed
+    )
 
     rec_a = await store_a.fetch(actor="order-agent", tool_name="get_order", order_id="ord_1")
     assert store_a.owns(rec_a.evidence_ref)
@@ -88,7 +93,12 @@ async def test_evidence_store_fetch_emits_tool_result_consumed_trace(
     trace_writer: TraceWriter,
 ) -> None:
     gateway = FakeGateway()
-    store = EvidenceStore(case_id="CASE_001", gateway=gateway, trace=trace_writer)
+    store = EvidenceStore(
+        case_id="CASE_001",
+        gateway=gateway,
+        trace=trace_writer,
+        allowed_tools_by_actor={"order-agent": {"get_order"}},
+    )
 
     rec = await store.fetch(actor="order-agent", tool_name="get_order", order_id="ord_100")
     assert rec.evidence_ref.startswith("ev_")
@@ -124,6 +134,16 @@ async def test_evidence_store_blocks_unauthorized_tools(trace_writer: TraceWrite
 
 
 @pytest.mark.asyncio
+async def test_evidence_store_blocks_unregistered_actor(trace_writer: TraceWriter) -> None:
+    """Fail-closed: an actor that was never registered has no tools at all."""
+    gateway = FakeGateway()
+    store = EvidenceStore(case_id="CASE_001", gateway=gateway, trace=trace_writer)
+
+    with pytest.raises(PermissionError, match="not authorized"):
+        await store.fetch(actor="ghost-agent", tool_name="get_order", order_id="ord_1")
+
+
+@pytest.mark.asyncio
 async def test_evidence_store_retry_behavior_on_network_timeout(
     trace_writer: TraceWriter,
 ) -> None:
@@ -131,7 +151,12 @@ async def test_evidence_store_retry_behavior_on_network_timeout(
     gateway.fail_countdown = 2
     gateway.fail_exception = httpx2.TimeoutException("Read timeout")
 
-    store = EvidenceStore(case_id="CASE_001", gateway=gateway, trace=trace_writer)
+    store = EvidenceStore(
+        case_id="CASE_001",
+        gateway=gateway,
+        trace=trace_writer,
+        allowed_tools_by_actor={"order-agent": {"get_order"}},
+    )
     rec = await store.fetch(actor="order-agent", tool_name="get_order", order_id="ord_1")
 
     # Called 3 times (2 retries + 1 success)
@@ -145,7 +170,12 @@ async def test_evidence_store_no_retry_on_not_found(trace_writer: TraceWriter) -
     gateway.fail_countdown = 2
     gateway.fail_exception = RuntimeError("Order not found in database")
 
-    store = EvidenceStore(case_id="CASE_001", gateway=gateway, trace=trace_writer)
+    store = EvidenceStore(
+        case_id="CASE_001",
+        gateway=gateway,
+        trace=trace_writer,
+        allowed_tools_by_actor={"order-agent": {"get_order"}},
+    )
     with pytest.raises(RuntimeError, match="Order not found"):
         await store.fetch(actor="order-agent", tool_name="get_order", order_id="nonexistent")
 

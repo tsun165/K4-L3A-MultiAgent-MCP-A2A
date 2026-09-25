@@ -193,9 +193,16 @@ def select_shipping_limits(
 
 
 def _parse(value: Any) -> datetime | None:
+    """Parse an ISO timestamp, dropping tzinfo.
+
+    ``opened_at`` in case inputs carries a UTC offset (e.g. ``-03:00``) while MCP
+    timestamps may be naive; comparing aware and naive datetimes raises TypeError.
+    Only relative ordering is needed here, so normalize both to naive.
+    """
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
+        return parsed.replace(tzinfo=None)
     except ValueError:
         return None
