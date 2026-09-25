@@ -39,10 +39,14 @@ class PaymentAgent:
     Also computes findings["paid_total_brl"] / findings["refunded_total_brl"] consumed by
     OrderAgent.apply_payment_totals() for canceled_order_paid / unavailable_order_paid.
 
-    NOTE: field names below (payment_value, payment_type, payment_installments,
-    payment_sequential, refund_status, refund_amount, refund_id) are NOT yet verified
-    against a live MCP response (server was unreachable at authoring time). Every access
-    uses ``.get()`` so an unexpected shape degrades to zero/empty instead of crashing.
+    Field names verified against a live MCP response (2026-09-25):
+      - get_order_payments -> list of {order_id, payment_sequential, payment_type,
+        payment_installments, payment_value}. Numeric fields are strings ("79.00").
+      - get_refund_timeline -> a single object {order_id, events: [...]}, NOT a list.
+        Each event is {order_id, event_at, event_type, amount_brl, status}, status in
+        {"pending", "failed"} observed so far ("completed"/equivalent not yet seen live).
+        The tool errors outright when an order has no refund history at all (observed on
+        a live case) -- treated as "no refunds", see the try/except below.
     """
 
     name: str = "payment-agent"
@@ -85,14 +89,25 @@ class PaymentAgent:
 
         total_paid = sum((_dec(p.get("payment_value")) for p in payments), Decimal("0.00"))
 
-        refunds_rec = await store.fetch(self.name, GET_REFUND_TIMELINE, order_id=order_id)
-        refunds = refunds_rec.data if isinstance(refunds_rec.data, list) else []
-        if refunds:
-            result.evidence_refs.append(refunds_rec.evidence_ref)
+        # get_refund_timeline returns a single {order_id, events:[...]} object, and errors
+        # outright when an order has no refund history at all (observed live) -- treat that
+        # as "no refunds", not a crash: an unrelated tool failure here must not wipe out
+        # paid_total_brl / the duplicate/mismatch classification below (STANDARDS §5:
+        # not-found -> no retry, mark missing, never invented data).
+        refund_events: list[dict[str, Any]] = []
+        try:
+            refunds_rec = await store.fetch(self.name, GET_REFUND_TIMELINE, order_id=order_id)
+            refund_data = refunds_rec.data if isinstance(refunds_rec.data, dict) else {}
+            events = refund_data.get("events")
+            refund_events = events if isinstance(events, list) else []
+            if refund_events:
+                result.evidence_refs.append(refunds_rec.evidence_ref)
+        except Exception as exc:  # noqa: BLE001 - degrade to "no refund data", don't crash
+            result.errors.append(f"get_refund_timeline: {type(exc).__name__}: {exc}"[:200])
 
-        completed_refunds = [r for r in refunds if r.get("refund_status") == "completed"]
+        completed_events = [e for e in refund_events if e.get("status") == "completed"]
         total_refunded = sum(
-            (_dec(r.get("refund_amount")) for r in completed_refunds), Decimal("0.00")
+            (_dec(e.get("amount_brl")) for e in completed_events), Decimal("0.00")
         )
         result.findings["paid_total_brl"] = float(total_paid)
         result.findings["refunded_total_brl"] = float(total_refunded)
@@ -102,26 +117,28 @@ class PaymentAgent:
             return
 
         # --- refund_failed / refund_pending take priority over other payment checks ---
-        failed_refunds = [r for r in refunds if r.get("refund_status") == "failed"]
-        if failed_refunds:
+        failed_events = [e for e in refund_events if e.get("status") == "failed"]
+        if failed_events:
             self._conclude_refund(
                 result,
                 topic="refund_failed",
                 claimed_topics=claimed_topics,
-                refunds=failed_refunds,
+                events=failed_events,
+                order_id=order_id,
                 reason_code=vocab.FAILED_REFUND_REISSUE,
                 cause_code=vocab.REFUND_PROCESSING_FAILED,
             )
             return
 
-        pending_refunds = [r for r in refunds if r.get("refund_status") == "pending"]
-        if pending_refunds:
+        pending_events = [e for e in refund_events if e.get("status") == "pending"]
+        if pending_events:
             self._conclude_refund(
                 result,
                 topic="refund_pending",
                 claimed_topics=claimed_topics,
-                refunds=pending_refunds,
-                reason_code=None,
+                events=pending_events,
+                order_id=order_id,
+                reason_code=vocab.PENDING_REFUND_MONITORING,
                 cause_code=vocab.REFUND_NOT_COMPLETED,
             )
             return
@@ -213,7 +230,8 @@ class PaymentAgent:
         *,
         topic: str,
         claimed_topics: set[str],
-        refunds: list[dict[str, Any]],
+        events: list[dict[str, Any]],
+        order_id: str,
         reason_code: str | None,
         cause_code: str,
     ) -> None:
@@ -222,13 +240,14 @@ class PaymentAgent:
         result.cause_codes.append(cause_code)
         result.responsible_parties.append({"party_type": "payment_provider", "party_id": None})
         if reason_code is not None:
-            for r in refunds:
-                amount = _dec(r.get("refund_amount"))
+            # get_refund_timeline events carry no distinct id; entity_id falls back to order_id.
+            for e in events:
+                amount = _dec(e.get("amount_brl"))
                 if amount > 0:
                     result.refund_lines.append(
                         {
                             "reason_code": reason_code,
                             "amount_brl": float(amount),
-                            "entity_id": r.get("refund_id"),
+                            "entity_id": order_id,
                         }
                     )

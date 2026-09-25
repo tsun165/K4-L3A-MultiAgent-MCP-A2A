@@ -90,7 +90,7 @@ async def test_canceled_order_paid_with_refund(
                 {"order_item_id": "item-1", "seller_id": "seller-1", "price": "10.00"}
             ],
             "get_order_payments": [{"payment_sequential": 1, "payment_value": "100.00"}],
-            "get_refund_timeline": [],
+            "get_refund_timeline": {"order_id": ORDER_ID, "events": []},
             "get_policy": {"policy_version": "EC_POLICY_V1"},
         }
     )
@@ -153,7 +153,7 @@ async def test_valid_split_payment_is_no_action(
             "get_order_items": [
                 {"order_item_id": "item-1", "price": "90.00", "freight_value": "10.00"}
             ],
-            "get_refund_timeline": [],
+            "get_refund_timeline": {"order_id": ORDER_ID, "events": []},
         }
     )
     output = await solve_case(_case("valid_split_payment"), gw, trace_writer)
@@ -163,6 +163,38 @@ async def test_valid_split_payment_is_no_action(
     assert output["assessment"]["case_status"] == "no_action"
     assert output["financial_resolution"]["recommended_refund_brl"] == 0.0
     assert output["financial_resolution"]["refund_lines"] == []
+
+
+@pytest.mark.asyncio
+async def test_refund_pending_uses_events_shape(
+    trace_writer: TraceWriter, contracts: Contracts
+) -> None:
+    """get_refund_timeline returns {order_id, events:[...]}, not a list of refunds."""
+    gw = ScriptedGateway(
+        {
+            "get_order_payments": [{"payment_sequential": 1, "payment_value": "89.00"}],
+            "get_order_items": [
+                {"order_item_id": "item-1", "price": "89.00", "freight_value": "0"}
+            ],
+            "get_refund_timeline": {
+                "order_id": ORDER_ID,
+                "events": [
+                    {
+                        "order_id": ORDER_ID,
+                        "event_at": "2018-08-07T09:00:00-03:00",
+                        "event_type": "refund_requested",
+                        "amount_brl": "89.00",
+                        "status": "pending",
+                    }
+                ],
+            },
+        }
+    )
+    output = await solve_case(_case("refund_pending"), gw, trace_writer)
+    contracts.validate_output(output, "refund_pending output")
+
+    assert output["assessment"]["primary_issue"] == "refund_pending"
+    assert output["financial_resolution"]["recommended_refund_brl"] == 89.0
 
 
 @pytest.mark.asyncio
