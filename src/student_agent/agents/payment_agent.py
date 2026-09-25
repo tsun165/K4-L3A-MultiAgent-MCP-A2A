@@ -116,91 +116,106 @@ class PaymentAgent:
         if not claimed_topics:
             return
 
-        # --- refund_failed / refund_pending take priority over other payment checks ---
-        failed_events = [e for e in refund_events if e.get("status") == "failed"]
-        if failed_events:
-            self._conclude_refund(
-                result,
-                topic="refund_failed",
-                claimed_topics=claimed_topics,
-                events=failed_events,
-                order_id=order_id,
-                reason_code=vocab.FAILED_REFUND_REISSUE,
-                cause_code=vocab.REFUND_PROCESSING_FAILED,
-            )
-            return
+        # Each topic is only judged when the customer actually claimed it (STANDARDS §6:
+        # a case is templated around ONE issue; unrelated background evidence -- e.g. a
+        # stale failed-refund event on an order otherwise claimed as valid_split_payment,
+        # observed live -- must not silently hijack an unrelated case into the wrong issue).
+        contradicted: dict[str, str] = {}
 
-        pending_events = [e for e in refund_events if e.get("status") == "pending"]
-        if pending_events:
-            self._conclude_refund(
-                result,
-                topic="refund_pending",
-                claimed_topics=claimed_topics,
-                events=pending_events,
-                order_id=order_id,
-                reason_code=vocab.PENDING_REFUND_MONITORING,
-                cause_code=vocab.REFUND_NOT_COMPLETED,
-            )
-            return
-
-        # --- duplicate charge ---
-        duplicate = self._detect_duplicate(payments)
-        if duplicate is not None:
-            amount = _dec(duplicate.get("payment_value"))
-            self._set_claim_check(result, claimed_topics, "duplicate_charge")
-            result.candidate_issues.append(("duplicate_charge", 0.85))
-            result.cause_codes.append(vocab.DUPLICATE_PAYMENT_CAPTURED)
-            result.responsible_parties.append(
-                {"party_type": "payment_provider", "party_id": None}
-            )
-            if amount > 0:
-                result.refund_lines.append(
-                    {
-                        "reason_code": vocab.DUPLICATE_CHARGE_REFUND,
-                        "amount_brl": float(amount),
-                        "entity_id": pay_refs[-1] if pay_refs else None,
-                    }
+        if "refund_failed" in claimed_topics:
+            failed_events = [e for e in refund_events if e.get("status") == "failed"]
+            if failed_events:
+                self._conclude_refund(
+                    result,
+                    topic="refund_failed",
+                    claimed_topics=claimed_topics,
+                    events=failed_events,
+                    order_id=order_id,
+                    reason_code=vocab.FAILED_REFUND_REISSUE,
+                    cause_code=vocab.REFUND_PROCESSING_FAILED,
                 )
-            return
+                return
+            contradicted["refund_failed"] = vocab.CLAIM_CONTRADICTED
 
-        # --- payment amount mismatch ---
-        items_rec = await store.fetch(self.name, GET_ORDER_ITEMS, order_id=order_id)
-        items = items_rec.data if isinstance(items_rec.data, list) else []
-        expected_total = sum(
-            (_dec(i.get("price")) + _dec(i.get("freight_value")) for i in items),
-            Decimal("0.00"),
-        )
-        if items:
-            result.evidence_refs.append(items_rec.evidence_ref)
-
-        diff = (total_paid - expected_total).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
-        if diff != 0 and "payment_mismatch" in claimed_topics:
-            self._set_claim_check(result, claimed_topics, "payment_mismatch")
-            result.candidate_issues.append(("payment_mismatch", 0.8))
-            result.cause_codes.append(vocab.PAYMENT_AMOUNT_MISMATCH)
-            result.responsible_parties.append(
-                {"party_type": "payment_provider", "party_id": None}
-            )
-            if diff > 0:
-                result.refund_lines.append(
-                    {
-                        "reason_code": vocab.PAYMENT_DIFFERENCE_REFUND,
-                        "amount_brl": float(diff),
-                        "entity_id": pay_refs[-1] if pay_refs else None,
-                    }
+        if "refund_pending" in claimed_topics:
+            pending_events = [e for e in refund_events if e.get("status") == "pending"]
+            if pending_events:
+                self._conclude_refund(
+                    result,
+                    topic="refund_pending",
+                    claimed_topics=claimed_topics,
+                    events=pending_events,
+                    order_id=order_id,
+                    reason_code=vocab.PENDING_REFUND_MONITORING,
+                    cause_code=vocab.REFUND_NOT_COMPLETED,
                 )
-            # underpayment (diff < 0): flagged via cause/needs_investigation, no refund guessed
-            return
+                return
+            contradicted["refund_pending"] = vocab.CLAIM_CONTRADICTED
 
-        # --- valid split payment ---
+        if "duplicate_charge" in claimed_topics:
+            duplicate = self._detect_duplicate(payments)
+            if duplicate is not None:
+                amount = _dec(duplicate.get("payment_value"))
+                self._set_claim_check(result, claimed_topics, "duplicate_charge")
+                result.candidate_issues.append(("duplicate_charge", 0.85))
+                result.cause_codes.append(vocab.DUPLICATE_PAYMENT_CAPTURED)
+                result.responsible_parties.append(
+                    {"party_type": "payment_provider", "party_id": None}
+                )
+                if amount > 0:
+                    result.refund_lines.append(
+                        {
+                            "reason_code": vocab.DUPLICATE_CHARGE_REFUND,
+                            "amount_brl": float(amount),
+                            "entity_id": pay_refs[-1] if pay_refs else None,
+                        }
+                    )
+                return
+            contradicted["duplicate_charge"] = vocab.CLAIM_CONTRADICTED
+
+        diff: Decimal | None = None
+        if "payment_mismatch" in claimed_topics or "valid_split_payment" in claimed_topics:
+            items_rec = await store.fetch(self.name, GET_ORDER_ITEMS, order_id=order_id)
+            items = items_rec.data if isinstance(items_rec.data, list) else []
+            expected_total = sum(
+                (_dec(i.get("price")) + _dec(i.get("freight_value")) for i in items),
+                Decimal("0.00"),
+            )
+            if items:
+                result.evidence_refs.append(items_rec.evidence_ref)
+            diff = (total_paid - expected_total).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+        if "payment_mismatch" in claimed_topics:
+            if diff != 0:
+                self._set_claim_check(result, claimed_topics, "payment_mismatch")
+                result.candidate_issues.append(("payment_mismatch", 0.8))
+                result.cause_codes.append(vocab.PAYMENT_AMOUNT_MISMATCH)
+                result.responsible_parties.append(
+                    {"party_type": "payment_provider", "party_id": None}
+                )
+                if diff is not None and diff > 0:
+                    result.refund_lines.append(
+                        {
+                            "reason_code": vocab.PAYMENT_DIFFERENCE_REFUND,
+                            "amount_brl": float(diff),
+                            "entity_id": pay_refs[-1] if pay_refs else None,
+                        }
+                    )
+                # underpayment (diff < 0): flagged via cause, no refund guessed
+                return
+            contradicted["payment_mismatch"] = vocab.CLAIM_CONTRADICTED
+
         if "valid_split_payment" in claimed_topics:
             is_split = len(payments) > 1 and diff == 0
-            self._set_claim_check(
-                result, claimed_topics, "valid_split_payment" if is_split else None
-            )
             if is_split:
+                self._set_claim_check(result, claimed_topics, "valid_split_payment")
                 result.candidate_issues.append(("valid_split_payment", 0.9))
                 result.cause_codes.append(vocab.SPLIT_PAYMENT_VALID)
+                return
+            contradicted["valid_split_payment"] = vocab.CLAIM_CONTRADICTED
+
+        if contradicted:
+            result.findings["claim_check"] = contradicted
 
     def _detect_duplicate(self, payments: list[dict[str, Any]]) -> dict[str, Any] | None:
         seen: dict[tuple[Any, ...], dict[str, Any]] = {}
