@@ -204,6 +204,16 @@ def _resolve_primary_issue(
     fully_contradicted = contradicted_topics >= primary_claimed
     if primary_claimed and fully_investigated and fully_contradicted:
         return "unsupported_claim", 0.8
+
+    # The customer's own claim can literally be topic "unsupported_claim" (a vague
+    # complaint with no specific, checkable assertion -- observed live, e.g. case 010's
+    # message "giao nhận không đúng cam kết" names no domain fact to verify). No
+    # specialist owns that literal string as an investigation target, so
+    # `primary_claimed` above is empty and the case would otherwise fall through to
+    # insufficient_evidence even though nothing is actually missing.
+    if "unsupported_claim" in claimed_topics and not primary_claimed:
+        return "unsupported_claim", 0.85
+
     return "insufficient_evidence", 0.25
 
 
