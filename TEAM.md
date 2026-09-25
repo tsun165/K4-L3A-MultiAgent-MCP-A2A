@@ -13,7 +13,7 @@
 | 1 | Đỗ Khắc Gia Khoa (@Dokhacgiakhoa) | 02733 | [Dokhacgiakhoa](https://github.com/Dokhacgiakhoa) | Trưởng nhóm & Integrator — interface (`agents/base.py`), coordinator (`workflow.py`), tool registry (`agents/tools.py`), mã chuẩn (`agents/vocab.py`), điều phối MCP, chạy full run và nộp bài | [Issue #1](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/1) | ✅ |
 | 2 | Đỗ Thái Sơn (@tsun165) | 03021 | [tsun165](https://github.com/tsun165) | Order/Item/Seller & Shipment agent (`agents/order_agent.py`, `agents/shipment_agent.py`) — rule `canceled_order_paid`, `unavailable_order_paid`, `late_delivery_seller`, `late_delivery_logistics` | [Issue #2](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/2) | ✅ |
 | 3 | Hoàng Thái Đạt (@Liber72) | 02959 | [Liber72](https://github.com/Liber72) | Payment/Refund & Policy agent (`agents/payment_agent.py`, `agents/policy_agent.py`) — rule `valid_split_payment`, `payment_mismatch`, `duplicate_charge`, `refund_pending`, `refund_failed` | [Issue #3](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/3) | ✅ |
-| 4 | Nguyễn Nguyên Phong (@Heargreaves1) | 02691 | [Heargreaves1](https://github.com/Heargreaves1) | Verifier & Calibration (`agents/verifier.py`, `calibration.py`) — kiểm định invariant, safe-downgrade, tính `confidence`; bộ test (`tests/`) | [Issue #8](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/8) | ✅ |
+| 4 | Nguyễn Nguyên Phong (@Heargreaves1) | 02691 | [Heargreaves1](https://github.com/Heargreaves1) | Verifier & Calibration (`agents/verifier.py`, `calibration.py`) — kiểm định invariant, safe-downgrade, tính `confidence`; bộ test (`tests/`) | [Issue #8](https://github.com/tsun165/K4-L3A-MultiAgent-MCP-A2A/issues/8) | ✅ |1
 
 ---
 
